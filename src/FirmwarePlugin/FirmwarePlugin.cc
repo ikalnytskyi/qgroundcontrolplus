@@ -44,6 +44,18 @@ AutoPilotPlugin *FirmwarePlugin::autopilotPlugin(Vehicle *vehicle) const
     return new GenericAutoPilotPlugin(vehicle, vehicle);
 }
 
+QStringList FirmwarePlugin::flightModes(Vehicle *vehicle) const
+{
+    Q_UNUSED(vehicle)
+    QStringList flightModesList;
+    for (const FirmwareFlightMode &mode : _flightModeList) {
+        if (mode.canBeSet){
+            flightModesList += mode.mode_name;
+        }
+    }
+    return flightModesList;
+}
+
 QString FirmwarePlugin::flightMode(uint8_t base_mode, uint32_t custom_mode) const
 {
     Q_UNUSED(custom_mode);
@@ -82,13 +94,21 @@ QString FirmwarePlugin::flightMode(uint8_t base_mode, uint32_t custom_mode) cons
 
 bool FirmwarePlugin::setFlightMode(const QString &flightMode, uint8_t *base_mode, uint32_t *custom_mode) const
 {
-    Q_UNUSED(flightMode);
-    Q_UNUSED(base_mode);
-    Q_UNUSED(custom_mode);
+    *base_mode = 0;
+    *custom_mode = 0;
 
-    qCWarning(FirmwarePluginLog) << "FirmwarePlugin::setFlightMode called on base class, not supported";
+    bool found = false;
 
-    return false;
+    for (const FirmwareFlightMode &mode: _flightModeList){
+        if (flightMode.compare(mode.mode_name, Qt::CaseInsensitive) == 0){
+            *base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
+            *custom_mode = mode.custom_mode;
+            found = true;
+            break;
+        }
+    }
+
+    return found;
 }
 
 QString FirmwarePlugin::missionCommandOverrides(QGCMAVLink::VehicleClass_t vehicleClass) const
