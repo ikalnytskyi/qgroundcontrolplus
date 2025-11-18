@@ -128,7 +128,7 @@ public:
 
     /// Returns the list of available flight modes for the Fly View dropdown. This may or may not be the full
     /// list available from the firmware. Call will be made again if advanced mode changes.
-    virtual QStringList flightModes(Vehicle* /*vehicle*/) const { return QStringList(); }
+    virtual QStringList flightModes(Vehicle* /*vehicle*/) const;
 
     /// Returns the name for this flight mode. Flight mode names must be human readable as well as audio speakable.
     ///     @param base_mode Base mode from mavlink HEARTBEAT message
@@ -141,7 +141,7 @@ public:
     virtual bool setFlightMode(const QString &flightMode, uint8_t *base_mode, uint32_t *custom_mode) const;
 
     /// returns true if this flight stack supports MAV_CMD_DO_SET_MODE
-    virtual bool MAV_CMD_DO_SET_MODE_is_supported() const { return false; }
+    virtual bool MAV_CMD_DO_SET_MODE_is_supported() const { return !_flightModeList.empty(); }
 
     /// Returns The flight mode which indicates the vehicle is paused
     virtual QString pauseFlightMode() const { return QString(); }
