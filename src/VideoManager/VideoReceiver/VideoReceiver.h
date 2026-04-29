@@ -19,6 +19,7 @@ public:
     {}
 
     bool isThermal() const { return (_name == QStringLiteral("thermalVideo")); }
+    bool isPipCamera() const { return _name.startsWith(QStringLiteral("pipCamera")); }
 
     void *sink() { return _sink; }
     QQuickItem *widget() { return _widget; }

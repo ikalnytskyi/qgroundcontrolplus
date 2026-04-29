@@ -27,6 +27,9 @@ class VideoManager : public QObject
     Q_PROPERTY(bool     uvcEnabled              READ uvcEnabled                                 CONSTANT)
     Q_PROPERTY(bool     autoStreamConfigured    READ autoStreamConfigured                       NOTIFY autoStreamConfiguredChanged)
     Q_PROPERTY(bool     decoding                READ decoding                                   NOTIFY decodingChanged)
+    Q_PROPERTY(bool     pipCamera1Decoding      READ pipCamera1Decoding                         NOTIFY pipCamera1DecodingChanged)
+    Q_PROPERTY(bool     pipCamera2Decoding      READ pipCamera2Decoding                         NOTIFY pipCamera2DecodingChanged)
+    Q_PROPERTY(bool     pipCamera3Decoding      READ pipCamera3Decoding                         NOTIFY pipCamera3DecodingChanged)
     Q_PROPERTY(bool     fullScreen              READ fullScreen             WRITE setfullScreen NOTIFY fullScreenChanged)
     Q_PROPERTY(bool     hasThermal              READ hasThermal                                 NOTIFY decodingChanged)
     Q_PROPERTY(bool     hasVideo                READ hasVideo                                   NOTIFY hasVideoChanged)
@@ -62,6 +65,9 @@ public:
     void cleanup();
     bool autoStreamConfigured() const;
     bool decoding() const { return _decoding; }
+    bool pipCamera1Decoding() const;
+    bool pipCamera2Decoding() const;
+    bool pipCamera3Decoding() const;
     bool fullScreen() const { return _fullScreen; }
     bool hasThermal() const;
     bool hasVideo() const;
@@ -85,6 +91,9 @@ signals:
     void aspectRatioChanged();
     void autoStreamConfiguredChanged();
     void decodingChanged();
+    void pipCamera1DecodingChanged();
+    void pipCamera2DecodingChanged();
+    void pipCamera3DecodingChanged();
     void fullScreenChanged();
     void hasVideoChanged();
     void imageFileChanged(const QString &filename);
@@ -144,6 +153,9 @@ private:
     QAtomicInteger<bool> _decoding = false;
     QAtomicInteger<bool> _recording = false;
     QAtomicInteger<bool> _streaming = false;
+    QAtomicInteger<bool> _pipCamera1Decoding = false;
+    QAtomicInteger<bool> _pipCamera2Decoding = false;
+    QAtomicInteger<bool> _pipCamera3Decoding = false;
     QSize _videoSize;
     QString _imageFile;
     QString _uvcVideoSourceID;

@@ -40,6 +40,19 @@
 
 QGC_LOGGING_CATEGORY(VideoManagerLog, "Video.VideoManager")
 
+// Fixed mapping: each receiver is permanently tied to one camera by index.
+// "videoContent" → camera[0], "pipCamera1Video" → camera[1], etc.
+// This means setCurrentCamera() triggers no stream restarts — only visual layout changes.
+static int _cameraIndexForReceiver(const VideoReceiver *receiver)
+{
+    const QString &n = receiver->name();
+    if (n == QLatin1String("videoContent"))    { return 0; }
+    if (n == QLatin1String("pipCamera1Video")) { return 1; }
+    if (n == QLatin1String("pipCamera2Video")) { return 2; }
+    if (n == QLatin1String("pipCamera3Video")) { return 3; }
+    return -1;
+}
+
 static constexpr const char *kFileExtension[VideoReceiver::FILE_FORMAT_MAX + 1] = {
     "mkv",
     "mov",
@@ -283,7 +296,10 @@ void VideoManager::_createVideoReceivers()
 #endif
     static const QStringList videoStreamList = {
         "videoContent",
-        "thermalVideo"
+        "thermalVideo",
+        "pipCamera1Video",
+        "pipCamera2Video",
+        "pipCamera3Video",
     };
     for (const QString &streamName : videoStreamList) {
         VideoReceiver *receiver = QGCCorePlugin::instance()->createVideoReceiver(this);
@@ -400,7 +416,7 @@ double VideoManager::aspectRatio() const
 {
     for (VideoReceiver *receiver : _videoReceivers) {
         QGCVideoStreamInfo *pInfo = receiver->videoStreamInfo();
-        if (!receiver->isThermal() && pInfo && !pInfo->isThermal()) {
+        if (!receiver->isThermal() && !receiver->isPipCamera() && pInfo && !pInfo->isThermal()) {
             return pInfo->aspectRatio();
         }
     }
@@ -425,7 +441,7 @@ double VideoManager::hfov() const
 {
     for (VideoReceiver *receiver : _videoReceivers) {
         QGCVideoStreamInfo *pInfo = receiver->videoStreamInfo();
-        if (!receiver->isThermal() && pInfo && !pInfo->isThermal()) {
+        if (!receiver->isThermal() && !receiver->isPipCamera() && pInfo && !pInfo->isThermal()) {
             return pInfo->hfov();
         }
     }
@@ -465,6 +481,21 @@ bool VideoManager::hasVideo() const
 bool VideoManager::isUvc() const
 {
     return (!_uvcVideoSourceID.isEmpty() && uvcEnabled() && hasVideo());
+}
+
+bool VideoManager::pipCamera1Decoding() const
+{
+    return _pipCamera1Decoding;
+}
+
+bool VideoManager::pipCamera2Decoding() const
+{
+    return _pipCamera2Decoding;
+}
+
+bool VideoManager::pipCamera3Decoding() const
+{
+    return _pipCamera3Decoding;
 }
 
 bool VideoManager::gstreamerEnabled()
@@ -521,6 +552,11 @@ bool VideoManager::isStreamSource() const
 
 void VideoManager::_videoSourceChanged()
 {
+    QHash<VideoReceiver*, QString> oldUris;
+    for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
+        oldUris[receiver] = receiver->uri();
+    }
+
     bool changed = false;
     if (_activeVehicle) {
         QGCCameraManager* camMgr = _activeVehicle->cameraManager();
@@ -529,7 +565,10 @@ void VideoManager::_videoSourceChanged()
             if (receiver->isThermal()) {
                 info = camMgr ? camMgr->thermalStreamInstance() : nullptr;
             } else {
-                info = camMgr ? camMgr->currentStreamInstance() : nullptr;
+                const int camIdx = _cameraIndexForReceiver(receiver);
+                if (camIdx >= 0) {
+                    info = camMgr ? camMgr->streamInstanceForCamera(camIdx) : nullptr;
+                }
             }
             receiver->setVideoStreamInfo(info);
             changed |= _updateSettings(receiver);
@@ -547,7 +586,11 @@ void VideoManager::_videoSourceChanged()
         emit isAutoStreamChanged();
 
         if (hasVideo()) {
-            _restartAllVideos();
+            for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
+                if (receiver->uri() != oldUris.value(receiver)) {
+                    _restartVideo(receiver);
+                }
+            }
         } else {
             stopVideo();
         }
@@ -585,7 +628,7 @@ bool VideoManager::autoStreamConfigured() const
 {
     for (VideoReceiver *receiver : _videoReceivers) {
         QGCVideoStreamInfo *pInfo = receiver->videoStreamInfo();
-        if (!receiver->isThermal() && pInfo && !pInfo->isThermal()) {
+        if (!receiver->isThermal() && !receiver->isPipCamera() && pInfo && !pInfo->isThermal()) {
             return !pInfo->uri().isEmpty();
         }
     }
@@ -620,7 +663,7 @@ bool VideoManager::_updateAutoStream(VideoReceiver *receiver)
     case VIDEO_STREAM_TYPE_RTSP:
         source = VideoSettings::videoSourceRTSP;
         url = pInfo->uri();
-        if (source == VideoSettings::videoSourceRTSP) {
+        if (!receiver->isPipCamera()) {
             _videoSettings->rtspUrl()->setRawValue(url);
         }
         break;
@@ -653,11 +696,10 @@ bool VideoManager::_updateAutoStream(VideoReceiver *receiver)
     }
 
     const bool settingsChanged = _updateVideoUri(receiver, url);
-    if (settingsChanged) {
+    if (settingsChanged && !receiver->isPipCamera()) {
         if (!receiver->isThermal()) {
             _videoSettings->videoSource()->setRawValue(source);
         }
-
         emit autoStreamConfiguredChanged();
     }
 
@@ -698,6 +740,12 @@ bool VideoManager::_updateSettings(VideoReceiver *receiver)
     }
 
     if (receiver->isThermal()) {
+        return settingsChanged;
+    }
+
+    if (receiver->isPipCamera()) {
+        // Only update the stream URI; never touch global video source settings.
+        settingsChanged |= _updateAutoStream(receiver);
         return settingsChanged;
     }
 
@@ -772,16 +820,17 @@ void VideoManager::_setActiveVehicle(Vehicle *vehicle)
         }
 
         for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
-            if (_activeVehicle->cameraManager()) {
+            QGCCameraManager *camMgr = _activeVehicle->cameraManager();
+            if (camMgr) {
                 if (receiver->isThermal()) {
-                    receiver->setVideoStreamInfo(_activeVehicle->cameraManager()->thermalStreamInstance());
+                    receiver->setVideoStreamInfo(camMgr->thermalStreamInstance());
                 } else {
-                    receiver->setVideoStreamInfo(_activeVehicle->cameraManager()->currentStreamInstance());
+                    const int camIdx = _cameraIndexForReceiver(receiver);
+                    receiver->setVideoStreamInfo(camIdx >= 0 ? camMgr->streamInstanceForCamera(camIdx) : nullptr);
                 }
             } else {
                 receiver->setVideoStreamInfo(nullptr);
             }
-            // connect(receiver->videoStreamInfo(), &QGCVideoStreamInfo::infoChanged, ))
         }
     } else {
         setfullScreen(false);
@@ -955,7 +1004,7 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
 
     (void) connect(receiver, &VideoReceiver::streamingChanged, this, [this, receiver](bool active) {
         qCDebug(VideoManagerLog) << "Video" << receiver->name() << "streaming changed, active:" << (active ? "yes" : "no");
-        if (!receiver->isThermal()) {
+        if (!receiver->isThermal() && !receiver->isPipCamera()) {
             _streaming = active;
             emit streamingChanged();
         }
@@ -963,15 +1012,24 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
 
     (void) connect(receiver, &VideoReceiver::decodingChanged, this, [this, receiver](bool active) {
         qCDebug(VideoManagerLog) << "Video" << receiver->name() << "decoding changed, active:" << (active ? "yes" : "no");
-        if (!receiver->isThermal()) {
+        if (!receiver->isThermal() && !receiver->isPipCamera()) {
             _decoding = active;
             emit decodingChanged();
+        } else if (receiver->name() == QStringLiteral("pipCamera1Video")) {
+            _pipCamera1Decoding = active;
+            emit pipCamera1DecodingChanged();
+        } else if (receiver->name() == QStringLiteral("pipCamera2Video")) {
+            _pipCamera2Decoding = active;
+            emit pipCamera2DecodingChanged();
+        } else if (receiver->name() == QStringLiteral("pipCamera3Video")) {
+            _pipCamera3Decoding = active;
+            emit pipCamera3DecodingChanged();
         }
     });
 
     (void) connect(receiver, &VideoReceiver::recordingChanged, this, [this, receiver](bool active) {
         qCDebug(VideoManagerLog) << "Video" << receiver->name() << "recording changed, active:" << (active ? "yes" : "no");
-        if (!receiver->isThermal()) {
+        if (!receiver->isThermal() && !receiver->isPipCamera()) {
             _recording = active;
             if (!active) {
                 _subtitleWriter->stopCapturingTelemetry();
@@ -982,14 +1040,14 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
 
     (void) connect(receiver, &VideoReceiver::recordingStarted, this, [this, receiver](const QString &filename) {
         qCDebug(VideoManagerLog) << "Video" << receiver->name() << "recording started";
-        if (!receiver->isThermal()) {
+        if (!receiver->isThermal() && !receiver->isPipCamera()) {
             _subtitleWriter->startCapturingTelemetry(filename, videoSize());
         }
     });
 
     (void) connect(receiver, &VideoReceiver::videoSizeChanged, this, [this, receiver](QSize size) {
         qCDebug(VideoManagerLog) << "Video" << receiver->name() << "resized. New resolution:" << size.width() << "x" << size.height();
-        if (!receiver->isThermal()) {
+        if (!receiver->isThermal() && !receiver->isPipCamera()) {
             _videoSize = size;
             emit videoSizeChanged();
         }
@@ -1007,7 +1065,11 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
         const QGCVideoStreamInfo *videoStreamInfo = receiver->videoStreamInfo();
         qCDebug(VideoManagerLog) << "Video" << receiver->name() << "stream info:" << (videoStreamInfo ? "received" : "lost");
 
-        (void) _updateAutoStream(receiver);
+        // Pip cameras have their URI updated via _updateSettings so the change
+        // is captured in the `changed` flag and triggers _restartAllVideos.
+        if (!receiver->isPipCamera()) {
+            (void) _updateAutoStream(receiver);
+        }
     });
 
     (void) _updateSettings(receiver);
