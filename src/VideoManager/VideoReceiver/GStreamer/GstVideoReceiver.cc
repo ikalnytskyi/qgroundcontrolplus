@@ -679,6 +679,8 @@ GstElement *GstVideoReceiver::_makeSource(const QString &input)
     const QUrl sourceUrl(input);
 
     const bool isRtsp = sourceUrl.scheme().startsWith("rtsp", Qt::CaseInsensitive);
+    const bool isWhep = (sourceUrl.scheme().compare(QStringLiteral("http"), Qt::CaseInsensitive) == 0)
+        || (sourceUrl.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0);
     const bool isUdp264 = input.contains("udp://", Qt::CaseInsensitive);
     const bool isUdp265 = input.contains("udp265://", Qt::CaseInsensitive);
     const bool isUdpMPEGTS = input.contains("mpegts://", Qt::CaseInsensitive);
@@ -735,6 +737,23 @@ GstElement *GstVideoReceiver::_makeSource(const QString &input)
                              "user-pw", rtspPassword.toUtf8().constData(),
                              nullptr);
             }
+        } else if (isWhep) {
+            source = gst_element_factory_make("whepclientsrc", "source");
+            if (!source) {
+                qCCritical(GstVideoReceiverLog) << "Unable to create WHEP source element 'whepclientsrc' (rswebrtc plugin missing?)";
+                break;
+            }
+
+            gst_child_proxy_set(GST_CHILD_PROXY(source),
+                                "signaller::whep-endpoint", input.toUtf8().constData(),
+                                nullptr);
+
+            // Advertise no audio codecs so WHEP negotiation is video-only. This
+            // avoids failures due to unsupported client audio codecs.
+            GValue audioCodecs = G_VALUE_INIT;
+            g_value_init(&audioCodecs, GST_TYPE_ARRAY);
+            g_object_set_property(G_OBJECT(source), "audio-codecs", &audioCodecs);
+            g_value_unset(&audioCodecs);
         } else if (isTcpMPEGTS) {
             source = gst_element_factory_make("tcpclientsrc", "source");
             if (!source) {

@@ -275,7 +275,7 @@ elseif(LINUX)
 endif()
 
 if(_gst_verify_dest)
-    set(_gst_required_plugins coreelements playback rtsp rtp rtpmanager tcp udp)
+    set(_gst_required_plugins coreelements dtls nice playback rswebrtc rtp rtpmanager rtsp srtp tcp udp webrtc)
     set(_gst_required_check "")
     foreach(_p IN LISTS _gst_required_plugins)
         list(APPEND _gst_required_check "${_gst_verify_prefix}${_p}.${_gst_verify_ext}")

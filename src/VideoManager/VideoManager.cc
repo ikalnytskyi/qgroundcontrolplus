@@ -506,6 +506,7 @@ bool VideoManager::isStreamSource() const
         VideoSettings::videoSourceUDPH264,
         VideoSettings::videoSourceUDPH265,
         VideoSettings::videoSourceRTSP,
+        VideoSettings::videoSourceWHEP,
         VideoSettings::videoSourceTCP,
         VideoSettings::videoSourceMPEGTS,
         VideoSettings::videoSource3DRSolo,
@@ -602,7 +603,20 @@ bool VideoManager::_updateAutoStream(VideoReceiver *receiver)
     qCDebug(VideoManagerLog) << QString("Configure stream (%1):").arg(receiver->name()) << pInfo->uri();
 
     QString source, url;
-    switch (pInfo->type()) {
+    quint8 streamType = pInfo->type();
+
+    // MAVLink currently has no standardized VIDEO_STREAM_TYPE value for WHEP,
+    // so we temporarily infer WHEP from HTTP(S) stream URIs. Once it's added to
+    // MAVLink and available in QGC's headers, remove this heuristic and switch
+    // to the upstream WHEP enum directly.
+    //
+    // Ref: https://github.com/mavlink/mavlink/pull/2489
+    const quint8 VIDEO_STREAM_TYPE_WHEP = 42;
+    if (pInfo->uri().contains(QStringLiteral("http://")) || pInfo->uri().contains(QStringLiteral("https://"))) {
+        streamType = VIDEO_STREAM_TYPE_WHEP;
+    }
+
+    switch (streamType) {
     case VIDEO_STREAM_TYPE_RTSP:
         source = VideoSettings::videoSourceRTSP;
         url = pInfo->uri();
@@ -626,6 +640,10 @@ bool VideoManager::_updateAutoStream(VideoReceiver *receiver)
     case VIDEO_STREAM_TYPE_MPEG_TS:
         source = VideoSettings::videoSourceMPEGTS;
         url = pInfo->uri().contains("mpegts://") ? pInfo->uri() : QStringLiteral("mpegts://0.0.0.0:%1").arg(pInfo->uri());
+        break;
+    case VIDEO_STREAM_TYPE_WHEP:
+        source = VideoSettings::videoSourceWHEP;
+        url = pInfo->uri();
         break;
     default:
         qCWarning(VideoManagerLog) << "Unknown VIDEO_STREAM_TYPE";
@@ -695,6 +713,8 @@ bool VideoManager::_updateSettings(VideoReceiver *receiver)
         settingsChanged |= _updateVideoUri(receiver, QStringLiteral("mpegts://%1").arg(_videoSettings->udpUrl()->rawValue().toString()));
     } else if (source == VideoSettings::videoSourceRTSP) {
         settingsChanged |= _updateVideoUri(receiver, _videoSettings->rtspUrl()->rawValue().toString());
+    } else if (source == VideoSettings::videoSourceWHEP) {
+        settingsChanged |= _updateVideoUri(receiver, _videoSettings->whepUrl()->rawValue().toString());
     } else if (source == VideoSettings::videoSourceTCP) {
         settingsChanged |= _updateVideoUri(receiver, QStringLiteral("tcp://%1").arg(_videoSettings->tcpUrl()->rawValue().toString()));
     } else if (source == VideoSettings::videoSource3DRSolo) {
