@@ -159,6 +159,29 @@ jobs:
             -DQT_HOST_PATH=${{ steps.setup.outputs.host_qt_root_dir }}
             -DQT_ANDROID_SIGN_APK=ON
 
+      - name: Build rswebrtc plugin (Release)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/rswebrtc
+        with:
+          platform: android
+          build-dir: ${{ runner.temp }}/build
+
+      - name: Re-configure after rswebrtc injection
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/cmake-configure
+        with:
+          build-dir: ${{ runner.temp }}/build
+          build-type: ${{ inputs.build_type || 'Release' }}
+          stable: ${{ env.IS_STABLE_BUILD }}
+          use-qt-cmake: 'false'
+          extra-args: >-
+            -DCMAKE_WARN_DEPRECATED=FALSE
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup.outputs.target_qt_root_dir }}/lib/cmake/Qt6/qt.toolchain.cmake
+            -DCMAKE_PREFIX_PATH=${{ steps.setup.outputs.target_qt_root_dir }}
+            -DQT_ANDROID_ABIS=${{ env.QT_ANDROID_ABIS }}
+            -DQT_HOST_PATH=${{ steps.setup.outputs.host_qt_root_dir }}
+            -DQT_ANDROID_SIGN_APK=ON
+
       - name: Build
         id: build
         continue-on-error: ${{ matrix.emulator }}

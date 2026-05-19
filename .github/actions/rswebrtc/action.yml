@@ -1,0 +1,42 @@
+name: Build rswebrtc
+description: Build gst-plugin-webrtc (rswebrtc) only via cargo-c and install into GStreamer plugin path
+
+inputs:
+  platform:
+    description: linux, windows, or android
+    required: true
+  build-dir:
+    description: CMake build directory containing CMakeCache.txt
+    required: true
+  gst-plugins-rs-ref:
+    description: git ref for gst-plugins-rs
+    required: false
+    default: main
+  windows-arch:
+    description: Windows architecture for Rust target
+    required: false
+    default: x86_64
+
+runs:
+  using: composite
+  steps:
+    - name: Fix Rust linker resolution (Windows)
+      if: runner.os == 'Windows' && inputs.platform == 'windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        git_link="/c/Program Files/Git/usr/bin/link.exe"
+        if [ -f "$git_link" ]; then
+          mv "$git_link" "${git_link}.bak"
+          echo "Renamed Git link.exe to prevent Rust linker conflict"
+        fi
+
+    - name: Build rswebrtc
+      shell: bash
+      run: |
+        set -euo pipefail
+        python "${GITHUB_WORKSPACE}/.github/scripts/build_rswebrtc.py" \
+          --platform "${{ inputs.platform }}" \
+          --build-dir "${{ inputs.build-dir }}" \
+          --gst-plugins-rs-ref "${{ inputs.gst-plugins-rs-ref }}" \
+          --windows-arch "${{ inputs.windows-arch }}"

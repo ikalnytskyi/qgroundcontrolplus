@@ -141,6 +141,25 @@ jobs:
             -DQGC_ENABLE_GST_VIDEOSTREAMING=${{ matrix.arch != 'win64_msvc2022_arm64_cross_compiled' && 'ON' || 'OFF' }}
             ${{ matrix.arch == 'win64_msvc2022_arm64_cross_compiled' && format('-DQT_HOST_PATH={0}', steps.qt-host.outputs.qt_root_dir) || '' }}
 
+      - name: Build rswebrtc plugin (Release)
+        if: matrix.arch != 'win64_msvc2022_arm64_cross_compiled'
+        uses: ./.github/actions/rswebrtc
+        with:
+          platform: windows
+          build-dir: ${{ runner.temp }}/build
+          windows-arch: ${{ matrix.variant == 'arm64' && 'arm64' || 'x86_64' }}
+
+      - name: Re-configure after rswebrtc injection
+        if: matrix.arch != 'win64_msvc2022_arm64_cross_compiled'
+        uses: ./.github/actions/cmake-configure
+        with:
+          build-dir: ${{ runner.temp }}/build
+          build-type: ${{ matrix.build_type }}
+          stable: ${{ env.IS_STABLE_BUILD }}
+          extra-args: >-
+            -DQGC_ENABLE_GST_VIDEOSTREAMING=ON
+            ${{ matrix.arch == 'win64_msvc2022_arm64_cross_compiled' && format('-DQT_HOST_PATH={0}', steps.qt-host.outputs.qt_root_dir) || '' }}
+
       - name: Add GStreamer to PATH
         if: matrix.arch != 'win64_msvc2022_arm64_cross_compiled'
         shell: pwsh
@@ -206,6 +225,11 @@ jobs:
             Write-Host "GStreamer plugins found: $pluginCount"
             if ($pluginCount -eq 0) {
               Write-Error "No GStreamer plugin DLLs found in $pluginDir"
+              exit 1
+            }
+            $rswebrtc = Join-Path $pluginDir "gstrswebrtc.dll"
+            if (-not (Test-Path $rswebrtc)) {
+              Write-Error "Missing rswebrtc plugin: $rswebrtc"
               exit 1
             }
           } else {

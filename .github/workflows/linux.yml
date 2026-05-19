@@ -97,6 +97,14 @@ jobs:
           build-type: Release
           stable: ${{ env.IS_STABLE_BUILD }}
 
+      - name: Build rswebrtc plugin (Release)
+        uses: ./.github/actions/rswebrtc
+        with:
+          platform: linux
+          build-dir: ${{ runner.temp }}/build
+          # Ubuntu 22.04 ships GStreamer 1.20.x; main branch currently requires newer.
+          gst-plugins-rs-ref: 0.14
+
       - name: Build
         uses: ./.github/actions/cmake-build
         with:

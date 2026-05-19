@@ -332,22 +332,15 @@ function(gstreamer_install_plugins)
         return()
     endif()
 
-    file(GLOB _all_plugins "${ARG_SOURCE_DIR}/${ARG_PREFIX}*.${ARG_EXTENSION}")
-
-    set(_plugins_to_install "")
-    foreach(_plugin_path IN LISTS _all_plugins)
-        get_filename_component(_plugin_name "${_plugin_path}" NAME)
-        foreach(_allowed IN LISTS GSTREAMER_PLUGINS)
-            if(_plugin_name MATCHES "^${ARG_PREFIX}${_allowed}([^a-zA-Z0-9]|$)")
-                list(APPEND _plugins_to_install "${_plugin_path}")
-                break()
-            endif()
-        endforeach()
+    # Install-time selection (not configure-time globbing): plugins injected after
+    # the initial configure step (for example rswebrtc built in CI) are still copied.
+    foreach(_allowed IN LISTS GSTREAMER_PLUGINS)
+        install(
+            FILES "${ARG_SOURCE_DIR}/${ARG_PREFIX}${_allowed}.${ARG_EXTENSION}"
+            DESTINATION "${ARG_DEST_DIR}"
+            OPTIONAL
+        )
     endforeach()
-
-    if(_plugins_to_install)
-        install(FILES ${_plugins_to_install} DESTINATION "${ARG_DEST_DIR}")
-    endif()
 endfunction()
 
 macro(_gst_configure_pkg_config)
