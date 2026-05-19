@@ -784,22 +784,27 @@ if(NOT DEFINED GSTREAMER_PLUGINS)
     set(GSTREAMER_PLUGINS
         app
         coreelements
+        dtls
         isomp4
         libav
         matroska
         mpegtsdemux
+        nice
         opengl
         openh264
         playback
+        rswebrtc
         rtp
         rtpmanager
         rtsp
         sdpelem
+        srtp
         tcp
         typefindfunctions
         udp
         videoparsersbad
         vpx
+        webrtc
         # gst >=1.22 split: only the one matching the SDK gets a target; #ifdef in GStreamer.cc picks it.
         videoconvertscale
         videoconvert

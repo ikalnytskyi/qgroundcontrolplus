@@ -182,6 +182,7 @@ void VideoManager::init(QQuickWindow *mainWindow)
     (void) connect(_videoSettings->videoSource(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->udpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->rtspUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_videoSettings->whepUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->tcpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->aspectRatio(), &Fact::rawValueChanged, this, &VideoManager::aspectRatioChanged);
     (void) connect(_videoSettings->lowLatencyMode(), &Fact::rawValueChanged, this, [this](const QVariant &value) { Q_UNUSED(value); _restartAllVideos(); });
@@ -506,6 +507,7 @@ bool VideoManager::isStreamSource() const
         VideoSettings::videoSourceUDPH264,
         VideoSettings::videoSourceUDPH265,
         VideoSettings::videoSourceRTSP,
+        VideoSettings::videoSourceWHEP,
         VideoSettings::videoSourceTCP,
         VideoSettings::videoSourceMPEGTS,
         VideoSettings::videoSource3DRSolo,
@@ -602,13 +604,13 @@ bool VideoManager::_updateAutoStream(VideoReceiver *receiver)
     qCDebug(VideoManagerLog) << QString("Configure stream (%1):").arg(receiver->name()) << pInfo->uri();
 
     QString source, url;
-    switch (pInfo->type()) {
+    quint8 streamType = pInfo->type();
+
+    switch (streamType) {
     case VIDEO_STREAM_TYPE_RTSP:
         source = VideoSettings::videoSourceRTSP;
         url = pInfo->uri();
-        if (source == VideoSettings::videoSourceRTSP) {
-            _videoSettings->rtspUrl()->setRawValue(url);
-        }
+        _videoSettings->rtspUrl()->setRawValue(url);
         break;
     case VIDEO_STREAM_TYPE_TCP_MPEG:
         source = VideoSettings::videoSourceTCP;
@@ -626,6 +628,11 @@ bool VideoManager::_updateAutoStream(VideoReceiver *receiver)
     case VIDEO_STREAM_TYPE_MPEG_TS:
         source = VideoSettings::videoSourceMPEGTS;
         url = pInfo->uri().contains("mpegts://") ? pInfo->uri() : QStringLiteral("mpegts://0.0.0.0:%1").arg(pInfo->uri());
+        break;
+    case VIDEO_STREAM_TYPE_WHEP:
+        source = VideoSettings::videoSourceWHEP;
+        url = pInfo->uri();
+        _videoSettings->whepUrl()->setRawValue(url);
         break;
     default:
         qCWarning(VideoManagerLog) << "Unknown VIDEO_STREAM_TYPE";
@@ -695,6 +702,8 @@ bool VideoManager::_updateSettings(VideoReceiver *receiver)
         settingsChanged |= _updateVideoUri(receiver, QStringLiteral("mpegts://%1").arg(_videoSettings->udpUrl()->rawValue().toString()));
     } else if (source == VideoSettings::videoSourceRTSP) {
         settingsChanged |= _updateVideoUri(receiver, _videoSettings->rtspUrl()->rawValue().toString());
+    } else if (source == VideoSettings::videoSourceWHEP) {
+        settingsChanged |= _updateVideoUri(receiver, _videoSettings->whepUrl()->rawValue().toString());
     } else if (source == VideoSettings::videoSourceTCP) {
         settingsChanged |= _updateVideoUri(receiver, QStringLiteral("tcp://%1").arg(_videoSettings->tcpUrl()->rawValue().toString()));
     } else if (source == VideoSettings::videoSource3DRSolo) {

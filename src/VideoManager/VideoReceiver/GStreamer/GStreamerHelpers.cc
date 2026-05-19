@@ -37,6 +37,32 @@ isValidRtspUri(const gchar *uri_str)
     return hasHost;
 }
 
+gboolean
+isValidWhepUri(const gchar *uri_str)
+{
+    if (!uri_str) {
+        return FALSE;
+    }
+
+    if (!gst_uri_is_valid(uri_str)) {
+        return FALSE;
+    }
+
+    if (!gst_uri_has_protocol(uri_str, "http") && !gst_uri_has_protocol(uri_str, "https")) {
+        return FALSE;
+    }
+
+    GstUri *uri = gst_uri_from_string(uri_str);
+    if (!uri) {
+        return FALSE;
+    }
+
+    const gchar *host = gst_uri_get_host(uri);
+    const gboolean hasHost = (host && host[0] != '\0');
+    gst_uri_unref(uri);
+    return hasHost;
+}
+
 bool isHardwareDecoderFactory(GstElementFactory *factory)
 {
     if (!factory) {

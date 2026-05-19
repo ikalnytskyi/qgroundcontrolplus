@@ -8,6 +8,7 @@
 namespace GStreamer
 {
     gboolean isValidRtspUri(const gchar *uri_str);
+    gboolean isValidWhepUri(const gchar *uri_str);
 
     bool isHardwareDecoderFactory(GstElementFactory *factory);
 
