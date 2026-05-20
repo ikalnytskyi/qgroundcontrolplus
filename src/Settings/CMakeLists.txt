@@ -51,6 +51,8 @@ target_sources(${CMAKE_PROJECT_NAME}
         UnitsSettings.h
         VideoSettings.cc
         VideoSettings.h
+        Video2Settings.cc
+        Video2Settings.h
         MapsSettings.cc
         MapsSettings.h
         Viewer3DSettings.cc

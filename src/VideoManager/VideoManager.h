@@ -14,6 +14,7 @@ class SubtitleWriter;
 class Vehicle;
 class VideoReceiver;
 class VideoSettings;
+class Video2Settings;
 
 class VideoManager : public QObject
 {
@@ -129,6 +130,7 @@ private:
     bool _updateAutoStream(VideoReceiver *receiver);
     bool _updateUVC(VideoReceiver *receiver);
     bool _updateSettings(VideoReceiver *receiver);
+    bool _updateSettingsFromSource(VideoReceiver *receiver, const QString &source, const QString &udpUrl, const QString &rtspUrl, const QString &whepUrl, const QString &tcpUrl);
     bool _updateVideoUri(VideoReceiver *receiver, const QString &uri);
     void _restartAllVideos();
     void _restartVideo(VideoReceiver *receiver);
@@ -139,6 +141,7 @@ private:
     QList<VideoReceiver*> _videoReceivers;
     SubtitleWriter *_subtitleWriter = nullptr;
     VideoSettings *_videoSettings = nullptr;
+    Video2Settings *_video2Settings = nullptr;
     QQuickWindow *_mainWindow = nullptr;
     Vehicle *_activeVehicle = nullptr;
 

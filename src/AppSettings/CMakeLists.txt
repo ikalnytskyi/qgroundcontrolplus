@@ -31,6 +31,7 @@ set(_generated_qml_names
     SettingsPagesModel.qml
     TelemetrySettings.qml
     VideoSettings.qml
+    Video2Settings.qml
     Viewer3DSettings.qml
 )
 
