@@ -14,6 +14,7 @@
 #include "VehicleLinkManager.h"
 #include "VideoReceiver.h"
 #include "VideoSettings.h"
+#include "Video2Settings.h"
 #include "QtMultimediaReceiver.h"
 #include "UVCReceiver.h"
 #ifdef QGC_GST_STREAMING
@@ -70,6 +71,7 @@ VideoManager::VideoManager(QObject *parent)
     : QObject(parent)
     , _subtitleWriter(new SubtitleWriter(this))
     , _videoSettings(SettingsManager::instance()->videoSettings())
+    , _video2Settings(SettingsManager::instance()->video2Settings())
 {
     qCDebug(VideoManagerLog) << this;
 
@@ -196,6 +198,11 @@ void VideoManager::init(QQuickWindow *mainWindow)
     (void) connect(_videoSettings->udpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->rtspUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->tcpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->videoSource(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->udpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->rtspUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->whepUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->tcpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->aspectRatio(), &Fact::rawValueChanged, this, &VideoManager::aspectRatioChanged);
     (void) connect(_videoSettings->lowLatencyMode(), &Fact::rawValueChanged, this, [this](const QVariant &value) { Q_UNUSED(value); _restartAllVideos(); });
     (void) connect(SettingsManager::instance()->appSettings()->gstDebugLevel(), &Fact::rawValueChanged, this, [](const QVariant &value) {
@@ -475,7 +482,9 @@ bool VideoManager::hasThermal() const
 
 bool VideoManager::hasVideo() const
 {
-    return (_videoSettings->streamEnabled()->rawValue().toBool() && _videoSettings->streamConfigured());
+    const bool primaryConfigured = (_videoSettings->streamEnabled()->rawValue().toBool() && _videoSettings->streamConfigured());
+    const bool secondaryConfigured = (_video2Settings->streamEnabled()->rawValue().toBool() && _video2Settings->streamConfigured());
+    return primaryConfigured || secondaryConfigured;
 }
 
 bool VideoManager::isUvc() const
@@ -733,7 +742,10 @@ bool VideoManager::_updateSettings(VideoReceiver *receiver)
 
     bool settingsChanged = false;
 
-    const bool lowLatency = _videoSettings->lowLatencyMode()->rawValue().toBool();
+    const bool useVideo2Settings = receiver->isPipCamera() && (receiver->name() == QStringLiteral("pipCamera1Video")) && !receiver->videoStreamInfo();
+    const bool lowLatency = useVideo2Settings
+        ? _video2Settings->lowLatencyMode()->rawValue().toBool()
+        : _videoSettings->lowLatencyMode()->rawValue().toBool();
     if (lowLatency != receiver->lowLatency()) {
         receiver->setLowLatency(lowLatency);
         settingsChanged = true;
@@ -744,27 +756,51 @@ bool VideoManager::_updateSettings(VideoReceiver *receiver)
     }
 
     if (receiver->isPipCamera()) {
-        // Only update the stream URI; never touch global video source settings.
+        // PiP cameras auto-follow MAVLink camera streams when available.
         settingsChanged |= _updateAutoStream(receiver);
+        // If the first PiP stream has no MAVLink stream info, use Video2 settings.
+        if ((receiver->name() == QStringLiteral("pipCamera1Video")) && !receiver->videoStreamInfo()) {
+            settingsChanged |= _updateSettingsFromSource(
+                receiver,
+                _video2Settings->videoSource()->rawValue().toString(),
+                _video2Settings->udpUrl()->rawValue().toString(),
+                _video2Settings->rtspUrl()->rawValue().toString(),
+                _video2Settings->whepUrl()->rawValue().toString(),
+                _video2Settings->tcpUrl()->rawValue().toString());
+        }
         return settingsChanged;
     }
 
     settingsChanged |= _updateUVC(receiver);
     settingsChanged |= _updateAutoStream(receiver);
 
-    const QString source = _videoSettings->videoSource()->rawValue().toString();
+    settingsChanged |= _updateSettingsFromSource(
+        receiver,
+        _videoSettings->videoSource()->rawValue().toString(),
+        _videoSettings->udpUrl()->rawValue().toString(),
+        _videoSettings->rtspUrl()->rawValue().toString(),
+        _videoSettings->whepUrl()->rawValue().toString(),
+        _videoSettings->tcpUrl()->rawValue().toString());
+
+    return settingsChanged;
+}
+
+bool VideoManager::_updateSettingsFromSource(VideoReceiver *receiver, const QString &source, const QString &udpUrl, const QString &rtspUrl, const QString &whepUrl, const QString &tcpUrl)
+{
+    bool settingsChanged = false;
+
     if (source == VideoSettings::videoSourceUDPH264) {
-        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp://%1").arg(_videoSettings->udpUrl()->rawValue().toString()));
+        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp://%1").arg(udpUrl));
     } else if (source == VideoSettings::videoSourceUDPH265) {
-        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp265://%1").arg(_videoSettings->udpUrl()->rawValue().toString()));
+        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp265://%1").arg(udpUrl));
     } else if (source == VideoSettings::videoSourceMPEGTS) {
-        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("mpegts://%1").arg(_videoSettings->udpUrl()->rawValue().toString()));
+        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("mpegts://%1").arg(udpUrl));
     } else if (source == VideoSettings::videoSourceRTSP) {
-        settingsChanged |= _updateVideoUri(receiver, _videoSettings->rtspUrl()->rawValue().toString());
+        settingsChanged |= _updateVideoUri(receiver, rtspUrl);
     } else if (source == VideoSettings::videoSourceWHEP) {
-        settingsChanged |= _updateVideoUri(receiver, _videoSettings->whepUrl()->rawValue().toString());
+        settingsChanged |= _updateVideoUri(receiver, whepUrl);
     } else if (source == VideoSettings::videoSourceTCP) {
-        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("tcp://%1").arg(_videoSettings->tcpUrl()->rawValue().toString()));
+        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("tcp://%1").arg(tcpUrl));
     } else if (source == VideoSettings::videoSource3DRSolo) {
         settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp://0.0.0.0:5600"));
     } else if (source == VideoSettings::videoSourceParrotDiscovery) {
@@ -779,7 +815,7 @@ bool VideoManager::_updateSettings(VideoReceiver *receiver)
         settingsChanged |= _updateVideoUri(receiver, QString());
     } else {
         settingsChanged |= _updateVideoUri(receiver, QString());
-        if (!isUvc()) {
+        if (!receiver->isPipCamera() && !isUvc()) {
             qCCritical(VideoManagerLog) << "Video source URI \"" << source << "\" is not supported. Please add support!";
         }
     }

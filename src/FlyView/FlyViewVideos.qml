@@ -16,6 +16,9 @@ Item {
     property var  _camMgr:   QGroundControl.multiVehicleManager.activeVehicle?.cameraManager ?? null
     property int  _curCam:   _camMgr ? _camMgr.currentCamera : 0
     property int  _camCount: _camMgr ? _camMgr.cameras.count : 0
+    property bool _manualVideo2Enabled: QGroundControl.settingsManager.video2Settings.streamEnabled.rawValue
+                                        && QGroundControl.settingsManager.video2Settings.streamConfigured
+    property bool _manualVideo2PrimaryIsPip1: false
     property var  _curCamObj: (_camMgr && _camCount > 0) ? _camMgr.cameras.get(_curCam) : null
 
     // Match the map/video PipView widget size so the pip column looks uniform.
@@ -53,8 +56,23 @@ Item {
         onTriggered: QGroundControl.videoManager.startVideo()
     }
 
+    function promoteManualCamera(camIdx) {
+        if (!_manualVideo2Enabled || _camCount > 1) {
+            return
+        }
+        if (camIdx === 0 || camIdx === 1) {
+            _manualVideo2PrimaryIsPip1 = (camIdx === 1)
+        }
+    }
+
     // Returns the pip-column slot index (0 = bottommost) for a non-current camera.
     function _slot(camIdx) {
+        if (_camCount <= 1 && _manualVideo2Enabled) {
+            if (camIdx === (_manualVideo2PrimaryIsPip1 ? 0 : 1)) {
+                return 0
+            }
+            return -1
+        }
         var s = 0
         for (var i = 0; i < _camCount; i++) {
             if (i === _curCam) continue
@@ -73,8 +91,11 @@ Item {
         required property int    camIdx
         required property string vidName
 
-        property bool _cur:      _root._curCam === _ci.camIdx
-        property bool _exists:   _ci.camIdx === 0 || _ci.camIdx < _root._camCount
+        property bool _manualMode: _root._camCount <= 1 && _root._manualVideo2Enabled
+        property bool _cur:      _manualMode
+                                 ? (_root._manualVideo2PrimaryIsPip1 ? (_ci.camIdx === 1) : (_ci.camIdx === 0))
+                                 : (_root._curCam === _ci.camIdx)
+        property bool _exists:   _ci.camIdx === 0 || _ci.camIdx < _root._camCount || (_ci.camIdx === 1 && _root._manualVideo2Enabled)
         property int  _slt:      _root._slot(_ci.camIdx)
         property var  _cam:      (_ci._exists && _root._camMgr)
                                   ? _root._camMgr.cameras.get(_ci.camIdx) : null
@@ -167,7 +188,9 @@ Item {
             enabled:      !_ci._cur
             z:            100  // On top of everything to ensure clicks work
             onClicked: {
-                if (_root._camMgr) {
+                if (_ci._manualMode) {
+                    _root.promoteManualCamera(_ci.camIdx)
+                } else if (_root._camMgr) {
                     _root._camMgr.currentCamera = _ci.camIdx
                 }
                 // Swap to video fullscreen if map is currently fullscreen
