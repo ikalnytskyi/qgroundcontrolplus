@@ -158,6 +158,47 @@ QString getSDCardPath()
     return result.toString();
 }
 
+QString getPrimaryAppExternalFilesPath()
+{
+    const QJniObject result = QJniObject::callStaticObjectMethod(
+        kJniQGCActivityClassName, "getPrimaryAppExternalFilesPath", "()Ljava/lang/String;");
+    QJniEnvironment env;
+    if (env.checkAndClearExceptions()) {
+        qCWarning(AndroidInterfaceLog) << "Exception in getPrimaryAppExternalFilesPath";
+        return QString();
+    }
+    if (!result.isValid()) {
+        qCWarning(AndroidInterfaceLog) << "Call to java getPrimaryAppExternalFilesPath failed: Invalid Result";
+        return QString();
+    }
+
+    return result.toString();
+}
+
+QString importExternalSettings(const QString& settingsFileName, const QString& internalSettingsFile, qint64 internalLastModifiedMs)
+{
+    const QJniObject jSettingsFileName = QJniObject::fromString(settingsFileName);
+    const QJniObject jInternalSettingsFile = QJniObject::fromString(internalSettingsFile);
+    const QJniObject result = QJniObject::callStaticObjectMethod(
+        kJniQGCActivityClassName,
+        "importExternalSettings",
+        "(Ljava/lang/String;Ljava/lang/String;J)Ljava/lang/String;",
+        jSettingsFileName.object<jstring>(),
+        jInternalSettingsFile.object<jstring>(),
+        static_cast<jlong>(internalLastModifiedMs));
+    QJniEnvironment env;
+    if (env.checkAndClearExceptions()) {
+        qCWarning(AndroidInterfaceLog) << "Exception in importExternalSettings";
+        return QString();
+    }
+    if (!result.isValid()) {
+        qCWarning(AndroidInterfaceLog) << "Call to java importExternalSettings failed: Invalid Result";
+        return QString();
+    }
+
+    return result.toString();
+}
+
 void openFileImportDialog(const QString& destPath, std::function<void(const QString&)> callback)
 {
     s_importCallback = std::move(callback);

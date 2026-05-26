@@ -38,6 +38,9 @@
 #include "SettingsManager.h"
 #include "MavlinkSettings.h"
 #include "AppSettings.h"
+#ifdef Q_OS_ANDROID
+#include "AndroidInterface.h"
+#endif
 #include "UDPLink.h"
 #include "Vehicle.h"
 #include "VehicleComponent.h"
@@ -48,6 +51,36 @@
 #endif
 
 QGC_LOGGING_CATEGORY(QGCApplicationLog, "API.QGCApplication")
+
+#ifdef Q_OS_ANDROID
+static void _importAndroidExternalSettings()
+{
+    const QString settingsFileName = QStringLiteral("%1.ini").arg(QCoreApplication::applicationName());
+
+    QSettings internalSettings;
+    const QString internalSettingsFile = internalSettings.fileName();
+    const QFileInfo internalSettingsInfo(internalSettingsFile);
+    const qint64 internalLastModifiedMs = internalSettingsInfo.exists()
+        ? internalSettingsInfo.lastModified().toMSecsSinceEpoch()
+        : 0;
+
+    const QString importResult = AndroidInterface::importExternalSettings(
+        settingsFileName, internalSettingsFile, internalLastModifiedMs);
+    if (importResult.isEmpty()) {
+        qCWarning(QGCApplicationLog) << "No readable Android external settings file found for" << settingsFileName;
+        return;
+    }
+
+    if (importResult.startsWith(QStringLiteral("__SKIP__"))) {
+        qCDebug(QGCApplicationLog) << "Skipping Android external settings import, internal settings are newer:"
+                                   << internalSettingsFile;
+        return;
+    }
+
+    qCInfo(QGCApplicationLog) << "Imported Android settings from"
+                              << importResult << "to" << internalSettingsFile;
+}
+#endif
 
 QGCApplication::QGCApplication(int &argc, char *argv[], const QGCCommandLineParser::CommandLineParseResult &cli)
     : QGuiApplication(argc, argv)
@@ -99,6 +132,9 @@ QGCApplication::QGCApplication(int &argc, char *argv[], const QGCCommandLinePars
 
     // Set settings format
     QSettings::setDefaultFormat(QSettings::IniFormat);
+#ifdef Q_OS_ANDROID
+    _importAndroidExternalSettings();
+#endif
     QSettings settings;
     qCDebug(QGCApplicationLog) << "Settings location" << settings.fileName() << "Is writable?:" << settings.isWritable();
 

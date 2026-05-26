@@ -1,7 +1,9 @@
 package org.mavlink.qgroundcontrol;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import android.app.Activity;
 import android.content.Intent;
@@ -243,6 +245,107 @@ public class QGCActivity extends QtActivity {
             activity.m_storagePermissionController = new QGCStoragePermissionController(activity);
         }
         return activity.m_storagePermissionController.getSDCardPath();
+    }
+
+    public static String getPrimaryAppExternalFilesPath() {
+        final QGCActivity activity = m_instance;
+        if (activity == null) {
+            QGCLogger.e(TAG, "Activity instance is null");
+            return "";
+        }
+
+        final File dir = activity.getExternalFilesDir(null);
+        if (dir == null) {
+            QGCLogger.w(TAG, "Primary app external files directory is unavailable");
+            return "";
+        }
+
+        final String path = dir.getAbsolutePath();
+        QGCLogger.i(TAG, "Primary app external files directory: " + path);
+        return path != null ? path : "";
+    }
+
+    private static boolean copyFile(final File sourceFile, final File destFile) {
+        try (FileInputStream fis = new FileInputStream(sourceFile);
+             FileOutputStream fos = new FileOutputStream(destFile)) {
+            final byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                fos.write(buffer, 0, bytesRead);
+            }
+            fos.getFD().sync();
+            return true;
+        } catch (IOException e) {
+            QGCLogger.e(TAG, "Failed to copy settings from " + sourceFile.getAbsolutePath()
+                + " to " + destFile.getAbsolutePath(), e);
+            return false;
+        }
+    }
+
+    public static String importExternalSettings(final String settingsFileName, final String internalSettingsFile,
+                                                final long internalLastModifiedMs) {
+        final QGCActivity activity = m_instance;
+        if (activity == null) {
+            QGCLogger.e(TAG, "Activity instance is null");
+            return "";
+        }
+
+        final File[] candidates = new File[] {
+            new File(activity.getExternalFilesDir(null), "QGroundControl/Config/" + settingsFileName),
+            new File("/sdcard/QGroundControl/Config/" + settingsFileName),
+            new File("/storage/emulated/0/QGroundControl/Config/" + settingsFileName)
+        };
+
+        File newestReadable = null;
+        for (File candidate : candidates) {
+            if (candidate == null) {
+                continue;
+            }
+
+            QGCLogger.i(TAG, "Checking Android external settings candidate: " + candidate.getAbsolutePath()
+                + " exists=" + candidate.exists()
+                + " isFile=" + candidate.isFile()
+                + " canRead=" + candidate.canRead());
+
+            if (!candidate.isFile() || !candidate.canRead()) {
+                continue;
+            }
+
+            if (newestReadable == null || candidate.lastModified() > newestReadable.lastModified()) {
+                newestReadable = candidate;
+            }
+        }
+
+        if (newestReadable == null) {
+            return "";
+        }
+
+        if (internalLastModifiedMs > 0 && newestReadable.lastModified() <= internalLastModifiedMs) {
+            return "__SKIP__" + newestReadable.getAbsolutePath();
+        }
+
+        final File internalFile = new File(internalSettingsFile);
+        final File internalDir = internalFile.getParentFile();
+        if (internalDir == null) {
+            QGCLogger.e(TAG, "Internal settings directory is null for " + internalSettingsFile);
+            return "";
+        }
+
+        if (!internalDir.exists() && !internalDir.mkdirs()) {
+            QGCLogger.e(TAG, "Failed to create internal settings directory: " + internalDir.getAbsolutePath());
+            return "";
+        }
+
+        if (internalFile.exists() && !internalFile.delete()) {
+            QGCLogger.e(TAG, "Failed to replace existing internal settings file: " + internalSettingsFile);
+            return "";
+        }
+
+        if (!copyFile(newestReadable, internalFile)) {
+            return "";
+        }
+
+        return newestReadable.getAbsolutePath();
     }
 
     /**

@@ -36,6 +36,10 @@ mkdir -p "${BUILD_DIR}"
 docker run \
     --rm \
     ${FUSE_FLAGS[@]+"${FUSE_FLAGS[@]}"} \
+    -e QT_ANDROID_KEYSTORE_PATH \
+    -e QT_ANDROID_KEYSTORE_ALIAS \
+    -e QT_ANDROID_KEYSTORE_STORE_PASS \
+    -e QT_ANDROID_KEYSTORE_KEY_PASS \
     -v "${SOURCE_DIR}:/project/source" \
     -v "${BUILD_DIR}:/project/build" \
     "${IMAGE_NAME}" \

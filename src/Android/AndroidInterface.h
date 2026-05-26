@@ -10,6 +10,8 @@ namespace AndroidInterface {
 void setNativeMethods();
 bool checkStoragePermissions();
 QString getSDCardPath();
+QString getPrimaryAppExternalFilesPath();
+QString importExternalSettings(const QString& settingsFileName, const QString& internalSettingsFile, qint64 internalLastModifiedMs);
 void setKeepScreenOn(bool on);
 void openFileImportDialog(const QString& destPath, std::function<void(const QString&)> callback);
 

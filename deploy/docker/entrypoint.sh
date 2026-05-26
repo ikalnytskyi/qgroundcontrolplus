@@ -21,13 +21,58 @@ if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
             exit 1
         fi
     done
+
+    if [[ -z "${QT_ANDROID_KEYSTORE_PATH:-}" || -z "${QT_ANDROID_KEYSTORE_ALIAS:-}" || -z "${QT_ANDROID_KEYSTORE_STORE_PASS:-}" || -z "${QT_ANDROID_KEYSTORE_KEY_PASS:-}" ]]; then
+        export QT_ANDROID_KEYSTORE_PATH=/tmp/debug.keystore
+        export QT_ANDROID_KEYSTORE_ALIAS=androiddebugkey
+        export QT_ANDROID_KEYSTORE_STORE_PASS=android
+        export QT_ANDROID_KEYSTORE_KEY_PASS=android
+
+        if [[ ! -f "${QT_ANDROID_KEYSTORE_PATH}" ]]; then
+            keytool -genkey -v \
+                -keystore "${QT_ANDROID_KEYSTORE_PATH}" \
+                -storepass "${QT_ANDROID_KEYSTORE_STORE_PASS}" \
+                -alias "${QT_ANDROID_KEYSTORE_ALIAS}" \
+                -keypass "${QT_ANDROID_KEYSTORE_KEY_PASS}" \
+                -keyalg RSA \
+                -keysize 2048 \
+                -validity 10000 \
+                -dname "CN=Android Debug,O=Android,C=US"
+        fi
+    fi
+
+    # Qt 6.10's Android QML packaging scans module inputs during configure.
+    # Pre-generate build-tree QML artifacts so scanner inputs already exist.
+    mkdir -p \
+        /project/build/src/UI/AppSettings/generated \
+        /project/build/src/AutoPilotPlugins/PX4/generated \
+        /project/build/src/AutoPilotPlugins/APM/generated
+    (
+        cd /project/source
+        PYTHONPATH=/project/source python3 -m tools.generators.settings_qml.generate_pages \
+        --output-dir /project/build/src/UI/AppSettings/generated
+    )
+    (
+        cd /project/source
+        PYTHONPATH=/project/source python3 -m tools.generators.config_qml.generate_pages \
+        --pages-dir /project/source/src/AutoPilotPlugins/PX4/VehicleConfig \
+        --output-dir /project/build/src/AutoPilotPlugins/PX4/generated
+    )
+    (
+        cd /project/source
+        PYTHONPATH=/project/source python3 -m tools.generators.config_qml.generate_pages \
+        --pages-dir /project/source/src/AutoPilotPlugins/APM/VehicleConfig \
+        --output-dir /project/build/src/AutoPilotPlugins/APM/generated
+    )
+
     echo "Building QGroundControl for Android (${BUILD_TYPE})..."
     "${QT_ROOT_DIR_ARM64}/bin/qt-cmake" -S /project/source -B /project/build -G Ninja \
         -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
         -DQT_HOST_PATH="${QT_HOST_PATH}" \
         -DQT_ANDROID_ABIS="${ANDROID_ABIS}" \
         -DANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}" \
-        -DQT_ANDROID_SIGN_APK=OFF
+        -DGStreamer_ROOT_DIR="${GStreamer_ROOT_DIR:-}" \
+        -DQT_ANDROID_SIGN_APK=ON
     cmake --build /project/build --target all --config "${BUILD_TYPE}" --parallel
 else
     echo "Building QGroundControl (${BUILD_TYPE})..."

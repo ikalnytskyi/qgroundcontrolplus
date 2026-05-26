@@ -9,7 +9,8 @@ import QGroundControl.Controls
 Item {
     property Window window
 
-    property bool _enabled: !ScreenTools.isMobile && !ScreenTools.isFakeMobile && QGroundControl.corePlugin.options.enableSaveMainWindowPosition
+    // Android tablets may not classify as "mobile", but they still need fullscreen app behavior.
+    property bool _enabled: !ScreenTools.isAndroid && !ScreenTools.isMobile && !ScreenTools.isFakeMobile && QGroundControl.corePlugin.options.enableSaveMainWindowPosition
 
     Settings {
         id:         s
@@ -33,7 +34,7 @@ Item {
         if (ScreenTools.isFakeMobile) {
             window.width = ScreenTools.screenWidth
             window.height = ScreenTools.screenHeight
-        } else if (ScreenTools.isMobile) {
+        } else if (ScreenTools.isAndroid || ScreenTools.isMobile) {
             window.showFullScreen();
         } else if (QGroundControl.corePlugin.options.enableSaveMainWindowPosition) {
             window.minimumWidth = Math.min(ScreenTools.defaultFontPixelWidth * 100, Screen.width)

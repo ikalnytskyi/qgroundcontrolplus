@@ -812,7 +812,10 @@ if(NOT DEFINED GSTREAMER_PLUGINS)
     )
     # Deferred for all platforms — GStreamer_VERSION is populated after find_package(GStreamer) below.
     if(ANDROID)
-        list(APPEND GSTREAMER_PLUGINS androidmedia dav1d)
+        # GStreamer 1.28.x Android SDK ships multiple Rust-backed static plugins.
+        # Linking rswebrtc and dav1d together into the single gstreamer_android
+        # shared library causes duplicate __rustc runtime symbols.
+        list(APPEND GSTREAMER_PLUGINS androidmedia)
     elseif(APPLE)
         list(APPEND GSTREAMER_PLUGINS applemedia dav1d vulkan)
     elseif(WIN32)
