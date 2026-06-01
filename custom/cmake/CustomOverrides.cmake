@@ -6,7 +6,9 @@
 # ----------------------------------------------------------------------------
 # Application Branding
 # ----------------------------------------------------------------------------
-set(QGC_APP_NAME "Custom-QGroundControl" CACHE STRING "App Name" FORCE)
+# Keep the target/executable name aligned with upstream CI, which verifies
+# and packages QGroundControl.exe directly.
+set(QGC_APP_NAME "QGroundControl" CACHE STRING "App Name" FORCE)
 
 # ----------------------------------------------------------------------------
 # Feature Set Customization
