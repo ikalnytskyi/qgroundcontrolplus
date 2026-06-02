@@ -28,6 +28,34 @@
 
 QGC_LOGGING_CATEGORY(GstVideoReceiverLog, "Video.GStreamer.GstVideoReceiver")
 
+namespace {
+void _setStringArrayProperty(GstElement *element, const char *propertyName, const char *const *values, size_t valueCount)
+{
+    GValue array = G_VALUE_INIT;
+    g_value_init(&array, GST_TYPE_ARRAY);
+
+    for (size_t i = 0; i < valueCount; ++i) {
+        GValue value = G_VALUE_INIT;
+        g_value_init(&value, G_TYPE_STRING);
+        g_value_set_static_string(&value, values[i]);
+        gst_value_array_append_value(&array, &value);
+        g_value_unset(&value);
+    }
+
+    g_object_set_property(G_OBJECT(element), propertyName, &array);
+    g_value_unset(&array);
+}
+
+void _setNullableStringProperty(GstElement *element, const char *propertyName, const char *value)
+{
+    GValue propertyValue = G_VALUE_INIT;
+    g_value_init(&propertyValue, G_TYPE_STRING);
+    g_value_set_string(&propertyValue, value);
+    g_object_set_property(G_OBJECT(element), propertyName, &propertyValue);
+    g_value_unset(&propertyValue);
+}
+} // namespace
+
 #if defined(QGC_HAS_GST_GLMEMORY_GPU_PATH) || defined(QGC_HAS_GST_D3D11_GPU_PATH) || defined(QGC_HAS_GST_D3D12_GPU_PATH)
 #include "HwBuffers/GstContextBridgeRegistry.h"
 namespace {
@@ -752,12 +780,17 @@ GstElement *GstVideoReceiver::_makeSource(const QString &input)
                                 "signaller::whep-endpoint", input.toUtf8().constData(),
                                 nullptr);
 
+            // WHEP is used by QGC as a video receiver. Prefer broadly
+            // compatible H264 while still allowing H265 streams.
+            const char *const videoCodecs[] = { "H264", "H265" };
+            _setStringArrayProperty(source, "video-codecs", videoCodecs, std::size(videoCodecs));
+
             // Advertise no audio codecs so WHEP negotiation is video-only. This
             // avoids failures due to unsupported client audio codecs.
-            GValue audioCodecs = G_VALUE_INIT;
-            g_value_init(&audioCodecs, GST_TYPE_ARRAY);
-            g_object_set_property(G_OBJECT(source), "audio-codecs", &audioCodecs);
-            g_value_unset(&audioCodecs);
+            _setStringArrayProperty(source, "audio-codecs", nullptr, 0);
+
+            // Avoid the rswebrtc default Google STUN server for LAN-only WHEP.
+            _setNullableStringProperty(source, "stun-server", nullptr);
         } else if (isTcpMPEGTS) {
             source = gst_element_factory_make("tcpclientsrc", "source");
             if (!source) {
