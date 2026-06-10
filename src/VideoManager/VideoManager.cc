@@ -47,6 +47,17 @@ static int _cameraIndexForReceiver(const VideoReceiver *receiver)
     return -1;
 }
 
+static VideoReceiver *_receiverForCameraIndex(const QList<VideoReceiver*> &receivers, int cameraIndex)
+{
+    for (VideoReceiver *receiver : receivers) {
+        if (_cameraIndexForReceiver(receiver) == cameraIndex) {
+            return receiver;
+        }
+    }
+
+    return nullptr;
+}
+
 static constexpr const char *kFileExtension[VideoReceiver::FILE_FORMAT_MAX + 1] = {
     "mkv",
     "mov",
@@ -795,6 +806,7 @@ void VideoManager::_setActiveVehicle(Vehicle *vehicle)
                 pCamera->stopStream();
             }
             (void) disconnect(cameraManager, &QGCCameraManager::streamChanged, this, &VideoManager::_videoSourceChanged);
+            (void) disconnect(cameraManager, &QGCCameraManager::currentCameraChanged, this, &VideoManager::_updatePrimaryStreamAudio);
         }
 
         for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
@@ -808,6 +820,7 @@ void VideoManager::_setActiveVehicle(Vehicle *vehicle)
         (void) connect(_activeVehicle->vehicleLinkManager(), &VehicleLinkManager::communicationLostChanged, this, &VideoManager::_communicationLostChanged);
         if (_activeVehicle->cameraManager()) {
             (void) connect(_activeVehicle->cameraManager(), &QGCCameraManager::streamChanged, this, &VideoManager::_videoSourceChanged);
+            (void) connect(_activeVehicle->cameraManager(), &QGCCameraManager::currentCameraChanged, this, &VideoManager::_updatePrimaryStreamAudio);
             MavlinkCameraControlInterface *pCamera = _activeVehicle->cameraManager()->currentCameraInstance();
             if (pCamera) {
                 pCamera->resumeStream();
@@ -830,6 +843,8 @@ void VideoManager::_setActiveVehicle(Vehicle *vehicle)
     } else {
         setfullScreen(false);
     }
+
+    _updatePrimaryStreamAudio();
 }
 
 void VideoManager::_communicationLostChanged(bool connectionLost)
@@ -903,6 +918,21 @@ void VideoManager::_startReceiver(VideoReceiver *receiver)
     const uint32_t timeout = ((source == VideoSettings::videoSourceRTSP) ? _videoSettings->rtspTimeout()->rawValue().toUInt() : 3);
 
     receiver->start(timeout);
+}
+
+void VideoManager::_updatePrimaryStreamAudio()
+{
+    int primaryCameraIndex = 0;
+    if (_activeVehicle) {
+        if (const QGCCameraManager *cameraManager = _activeVehicle->cameraManager()) {
+            primaryCameraIndex = cameraManager->currentCamera();
+        }
+    }
+
+    VideoReceiver *primaryReceiver = _receiverForCameraIndex(_videoReceivers, primaryCameraIndex);
+    for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
+        receiver->setAudioActive(!_audioMuted && (receiver == primaryReceiver));
+    }
 }
 
 void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *window)
@@ -1042,6 +1072,7 @@ void VideoManager::_initVideoReceiver(VideoReceiver *receiver, QQuickWindow *win
 
     (void) _updateSettings(receiver);
 
+    _updatePrimaryStreamAudio();
     if (hasVideo()) {
         _startReceiver(receiver);
     }

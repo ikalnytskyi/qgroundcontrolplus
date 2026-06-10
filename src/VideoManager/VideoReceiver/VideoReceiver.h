@@ -31,6 +31,7 @@ public:
     QString name() const { return _name; }
     QString uri() const { return _uri; }
     bool started() const { return _started; }
+    bool audioActive() const { return _audioActive.load(std::memory_order_relaxed); }
     bool lowLatency() const { return _lowLatency; }
     int rtpJitterLatencyMs() const { return _rtpJitterLatencyMs; }
     bool autoReconnect() const { return _autoReconnect; }
@@ -42,6 +43,7 @@ public:
     void setName(const QString &name) { if (name != _name) { _name = name; emit nameChanged(_name); } }
     void setUri(const QString &uri) { if (uri != _uri) { _uri = uri; emit uriChanged(_uri); } }
     void setStarted(bool started) { if (started != _started) { _started = started; emit startedChanged(_started); } }
+    virtual void setAudioActive(bool active) { _audioActive.store(active, std::memory_order_relaxed); }
     void setLowLatency(bool lowLatency) { if (lowLatency != _lowLatency) { _lowLatency = lowLatency; emit lowLatencyChanged(_lowLatency); } }
     void setRtpJitterLatencyMs(int ms) { if (ms != _rtpJitterLatencyMs) { _rtpJitterLatencyMs = ms; emit rtpJitterLatencyMsChanged(_rtpJitterLatencyMs); } }
     void setAutoReconnect(bool enabled) { if (enabled != _autoReconnect) { _autoReconnect = enabled; emit autoReconnectChanged(_autoReconnect); } }
@@ -112,6 +114,7 @@ protected:
     QString _name;
     QString _uri;
     bool _started = false;
+    std::atomic<bool> _audioActive = false;
     // Flipped on streaming threads, read cross-thread (e.g. tee probe logging).
     std::atomic<bool> _decoding = false;
     bool _recording = false;
