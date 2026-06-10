@@ -32,6 +32,7 @@ QGC_LOGGING_CATEGORY(GstVideoReceiverLog, "Video.GStreamer.GstVideoReceiver")
 namespace {
 // kEosTimeoutNs: bus wait budget for EOS/ERROR during stop(); 3 s covers slow hw decoders.
 constexpr GstClockTime kEosTimeoutNs = 3 * GST_SECOND;
+constexpr const char *kSourceAudioDecoderName = "source-audio-decoder";
 
 // Refs the element's first src pad into *userData and stops iterating. Resync is handled
 // internally by gst_element_foreach_src_pad (unlike a bare gst_iterator_next loop).
@@ -39,6 +40,76 @@ gboolean grabFirstSrcPad(GstElement * /*element*/, GstPad *pad, gpointer userDat
 {
     *static_cast<GstPad **>(userData) = GST_PAD(gst_object_ref(pad));
     return FALSE;
+}
+
+bool linkDynamicPadToElementSink(GstPad *srcPad, GstElement *target, const char *context)
+{
+    if (!srcPad || !target) {
+        qCCritical(GstVideoReceiverLog) << "Invalid parameters while linking dynamic pad";
+        return false;
+    }
+
+    GstPad *sinkPad = gst_element_get_static_pad(target, "sink");
+    if (!sinkPad) {
+        qCCritical(GstVideoReceiverLog) << "gst_element_get_static_pad('sink') failed for" << context;
+        return false;
+    }
+
+    if (gst_pad_is_linked(sinkPad)) {
+        qCDebug(GstVideoReceiverLog) << context << "sink already linked, ignoring extra pad";
+        gst_clear_object(&sinkPad);
+        return false;
+    }
+
+    const GstPadLinkReturn linkRet = gst_pad_link(srcPad, sinkPad);
+    gst_clear_object(&sinkPad);
+    if (linkRet != GST_PAD_LINK_OK) {
+        qCCritical(GstVideoReceiverLog) << context << "link failed with result:" << linkRet;
+        return false;
+    }
+
+    return true;
+}
+
+bool isAudioSourcePad(GstPad *pad)
+{
+    if (!pad) {
+        return false;
+    }
+
+    GstCaps *caps = gst_pad_query_caps(pad, nullptr);
+    if (caps) {
+        const guint nCaps = gst_caps_get_size(caps);
+        for (guint i = 0; i < nCaps; ++i) {
+            const GstStructure *structure = gst_caps_get_structure(caps, i);
+            if (!structure) {
+                continue;
+            }
+
+            const gchar *mediaType = gst_structure_get_name(structure);
+            if (mediaType && g_str_has_prefix(mediaType, "audio/")) {
+                gst_clear_caps(&caps);
+                return true;
+            }
+
+            const gchar *media = gst_structure_get_string(structure, "media");
+            if (media && (g_strcmp0(media, "audio") == 0)) {
+                gst_clear_caps(&caps);
+                return true;
+            }
+        }
+        gst_clear_caps(&caps);
+    }
+
+    gchar *name = gst_pad_get_name(pad);
+    if (!name) {
+        qCCritical(GstVideoReceiverLog) << "gst_pad_get_name() failed";
+        return false;
+    }
+
+    const bool isAudio = g_str_has_prefix(name, "audio_");
+    g_clear_pointer(&name, g_free);
+    return isAudio;
 }
 
 bool isRecoverableH265PaciError(GstMessage *msg, const GError *error, const gchar *debug)
@@ -98,6 +169,8 @@ void GstVideoReceiver::start(uint32_t timeout)
 
     _timeout = timeout;
     _buffer = lowLatency() ? -1 : 0;
+    gst_clear_object(&_audioMute);
+    gst_clear_object(&_audioDecoder);
 
     qCDebug(GstVideoReceiverLog) << "Starting" << _uri << ", lowLatency" << lowLatency() << ", timeout" << _timeout;
 
@@ -258,6 +331,9 @@ void GstVideoReceiver::start(uint32_t timeout)
             gst_clear_object(&_pipeline);
         }
 
+        gst_clear_object(&_audioMute);
+        gst_clear_object(&_audioDecoder);
+
         if (!pipelineUp) {
             gst_clear_object(&_recorderValve);
             gst_clear_object(&recorderQueue);
@@ -397,6 +473,9 @@ void GstVideoReceiver::stop()
             _pipeline = nullptr;
         }
 
+        gst_clear_object(&_audioMute);
+        gst_clear_object(&_audioDecoder);
+
         _recorderValve = nullptr;
         _decoderValve = nullptr;
         _tee = nullptr;
@@ -525,6 +604,34 @@ void GstVideoReceiver::stopDecoding()
     // FIXME: it is much better to emit onStopDecodingComplete() after decoding is really stopped
     // (which happens later due to async design) but as for now it is also not so bad...
     emit onStopDecodingComplete(ret ? STATUS_OK : STATUS_FAIL);
+}
+
+void GstVideoReceiver::setAudioActive(bool active)
+{
+    if (active == audioActive()) {
+        return;
+    }
+
+    VideoReceiver::setAudioActive(active);
+
+    if (!_audioMute) {
+        return;
+    }
+
+    if (_needDispatch()) {
+        _worker->dispatch([this]() {
+            if (_audioMute) {
+                g_object_set(_audioMute,
+                             "mute", audioActive() ? FALSE : TRUE,
+                             nullptr);
+            }
+        });
+        return;
+    }
+
+    g_object_set(_audioMute,
+                 "mute", audioActive() ? FALSE : TRUE,
+                 nullptr);
 }
 
 void GstVideoReceiver::startRecording(const QString &videoFile, FILE_FORMAT format)
@@ -789,6 +896,153 @@ GstElement *GstVideoReceiver::_makeDecoder()
     return decoder;
 }
 
+GstElement *GstVideoReceiver::_makeAudioSink(GstElement **audioMuteOut)
+{
+    GstElement *queue = nullptr;
+    GstElement *mute = nullptr;
+    GstElement *convert = nullptr;
+    GstElement *resample = nullptr;
+    GstElement *sink = nullptr;
+    GstElement *bin = nullptr;
+    bool releaseElements = true;
+
+    if (audioMuteOut) {
+        *audioMuteOut = nullptr;
+    }
+
+    do {
+        queue = gst_element_factory_make("queue", nullptr);
+        if (!queue) {
+            qCWarning(GstVideoReceiverLog) << "gst_element_factory_make('queue') failed for audio branch";
+            break;
+        }
+
+        g_object_set(queue,
+                     "leaky", 2,
+                     "max-size-buffers", 0,
+                     "max-size-bytes", 0,
+                     "max-size-time", G_GUINT64_CONSTANT(20000000),
+                     nullptr);
+
+        mute = gst_element_factory_make("volume", nullptr);
+        if (!mute) {
+            qCWarning(GstVideoReceiverLog) << "gst_element_factory_make('volume') failed for audio branch";
+            break;
+        }
+
+        g_object_set(mute,
+                     "mute", audioActive() ? FALSE : TRUE,
+                     nullptr);
+
+        convert = gst_element_factory_make("audioconvert", nullptr);
+        if (!convert) {
+            qCWarning(GstVideoReceiverLog) << "gst_element_factory_make('audioconvert') failed";
+            break;
+        }
+
+        resample = gst_element_factory_make("audioresample", nullptr);
+        if (!resample) {
+            qCWarning(GstVideoReceiverLog) << "gst_element_factory_make('audioresample') failed";
+            break;
+        }
+
+        sink = gst_element_factory_make("autoaudiosink", nullptr);
+        if (!sink) {
+            qCWarning(GstVideoReceiverLog) << "gst_element_factory_make('autoaudiosink') failed";
+            break;
+        }
+
+        g_object_set(sink,
+                     "sync", (_buffer >= 0),
+                     nullptr);
+
+        bin = gst_bin_new("audiosinkbin");
+        if (!bin) {
+            qCWarning(GstVideoReceiverLog) << "gst_bin_new('audiosinkbin') failed";
+            break;
+        }
+
+        gst_bin_add_many(GST_BIN(bin), queue, convert, resample, mute, sink, nullptr);
+        releaseElements = false;
+
+        if (!gst_element_link_many(queue, convert, resample, mute, sink, nullptr)) {
+            qCWarning(GstVideoReceiverLog) << "Unable to link audio sink branch";
+            break;
+        }
+
+        GstPad *pad = gst_element_get_static_pad(queue, "sink");
+        if (!pad) {
+            qCWarning(GstVideoReceiverLog) << "gst_element_get_static_pad(queue, 'sink') failed";
+            break;
+        }
+
+        GstPad *ghostPad = gst_ghost_pad_new("sink", pad);
+        gst_clear_object(&pad);
+        if (!ghostPad) {
+            qCWarning(GstVideoReceiverLog) << "gst_ghost_pad_new('sink') failed for audio branch";
+            break;
+        }
+
+        (void) gst_element_add_pad(bin, ghostPad);
+
+        if (audioMuteOut) {
+            *audioMuteOut = GST_ELEMENT(gst_object_ref(mute));
+        }
+
+        return bin;
+    } while (0);
+
+    if (releaseElements) {
+        gst_clear_object(&sink);
+        gst_clear_object(&resample);
+        gst_clear_object(&convert);
+        gst_clear_object(&mute);
+        gst_clear_object(&queue);
+    }
+
+    gst_clear_object(&bin);
+    return nullptr;
+}
+
+bool GstVideoReceiver::_ensureAudioBranch()
+{
+    if (!_pipeline) {
+        return false;
+    }
+
+    if (_audioDecoder) {
+        return true;
+    }
+
+    GstElement *audioDecoder = gst_element_factory_make("decodebin3", kSourceAudioDecoderName);
+    GstElement *audioMute = nullptr;
+    GstElement *audioSink = audioDecoder ? _makeAudioSink(&audioMute) : nullptr;
+
+    if (!audioDecoder || !audioSink) {
+        qCWarning(GstVideoReceiverLog) << "Disabling stream audio playback due to incomplete audio branch";
+        gst_clear_object(&audioSink);
+        gst_clear_object(&audioMute);
+        gst_clear_object(&audioDecoder);
+        return false;
+    }
+
+    gst_clear_object(&_audioMute);
+    gst_clear_object(&_audioDecoder);
+    _audioMute = audioMute;
+    _audioDecoder = GST_ELEMENT(gst_object_ref(audioDecoder));
+
+    gst_bin_add_many(GST_BIN(_pipeline), audioDecoder, audioSink, nullptr);
+    (void) g_signal_connect(audioDecoder, "pad-added", G_CALLBACK(_onNewAudioDecoderPad), audioSink);
+
+    if (!gst_element_sync_state_with_parent(audioDecoder)
+        || !gst_element_sync_state_with_parent(audioSink)) {
+        qCWarning(GstVideoReceiverLog) << "Unable to sync audio branch state with parent";
+        return false;
+    }
+
+    return true;
+}
+
 GstElement *GstVideoReceiver::_makeFileSink(const QString &videoFile, FILE_FORMAT format)
 {
     GstElement *fileSink = nullptr;
@@ -886,23 +1140,50 @@ GstElement *GstVideoReceiver::_makeFileSink(const QString &videoFile, FILE_FORMA
 
 void GstVideoReceiver::_onNewSourcePad(GstPad *pad)
 {
-    // FIXME: check for caps - if this is not video stream (and preferably - one of these which we have to support) then simply skip it
-    if (!gst_element_link(_source, _tee)) {
-        qCCritical(GstVideoReceiverLog) << "Unable to link source";
-        return;
-    }
-
     if (!_streaming) {
         _streaming = true;
         qCDebug(GstVideoReceiverLog) << "Streaming started" << _uri;
         emit streamingChanged(_streaming);
     }
 
-    _eosProbeId = gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, _eosProbe, this, nullptr);
-    if (_eosProbeId != 0) {
-        // Hold a ref so _shutdownDecodingBranch can remove the probe even after _decoder is gone.
-        _eosProbePad = GST_PAD_CAST(gst_object_ref(pad));
+    if ((_eosProbeId == 0) && !_eosProbePad) {
+        _eosProbeId = gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, _eosProbe, this, nullptr);
+        if (_eosProbeId != 0) {
+            // Hold a ref so _shutdownDecodingBranch can remove the probe even after _decoder is gone.
+            _eosProbePad = GST_PAD_CAST(gst_object_ref(pad));
+        }
     }
+
+    if (isAudioSourcePad(pad)) {
+        if (!_wantsAudioPlayback() || !_ensureAudioBranch()) {
+            return;
+        }
+
+        if (!linkDynamicPadToElementSink(pad, _audioDecoder, "Source audio pad")) {
+            qCWarning(GstVideoReceiverLog) << "Unable to link source audio pad";
+        }
+        return;
+    }
+
+    GstPad *teeSinkPad = gst_element_get_static_pad(_tee, "sink");
+    if (!teeSinkPad) {
+        qCCritical(GstVideoReceiverLog) << "gst_element_get_static_pad('sink') failed";
+        return;
+    }
+
+    if (gst_pad_is_linked(teeSinkPad)) {
+        gst_clear_object(&teeSinkPad);
+        qCDebug(GstVideoReceiverLog) << "Ignoring additional source pad for" << _uri;
+        return;
+    }
+
+    const GstPadLinkReturn linkRet = gst_pad_link(pad, teeSinkPad);
+    gst_clear_object(&teeSinkPad);
+    if (linkRet != GST_PAD_LINK_OK) {
+        qCCritical(GstVideoReceiverLog) << "Unable to link source, result:" << linkRet;
+        return;
+    }
+
     if (!_videoSink) {
         return;
     }
@@ -952,16 +1233,18 @@ void GstVideoReceiver::_logDecodebin3SelectedCodec(GstElement *decodebin3)
                 qCDebug(GstVideoReceiverLog) << "Decodebin3 selected codec:rank -" << pluginName << "/" << featureName << "-" << decoderKlass << (isHardwareDecoder ? "(HW)" : "(SW)") << ":" << rank;
 
                 const QString newName = QString::fromUtf8(featureName);
-                bool nameChanged = false;
-                {
-                    QMutexLocker locker(&_decoderNameMutex);
-                    if (newName != _decoderName) {
-                        _decoderName = newName;
-                        nameChanged = true;
+                if (decodebin3 == _decoder) {
+                    bool nameChanged = false;
+                    {
+                        QMutexLocker locker(&_decoderNameMutex);
+                        if (newName != _decoderName) {
+                            _decoderName = newName;
+                            nameChanged = true;
+                        }
                     }
-                }
-                if (nameChanged) {
-                    emit decoderStatsChanged();
+                    if (nameChanged) {
+                        emit decoderStatsChanged();
+                    }
                 }
 
                 // Disable QoS on the internal decoder to prevent cascading
@@ -1172,6 +1455,20 @@ void GstVideoReceiver::_noteVideoSinkFrame()
 void GstVideoReceiver::_noteEndOfStream()
 {
     _endOfStream = true;
+}
+
+void GstVideoReceiver::_onNewAudioDecoderPad(GstElement * /*element*/, GstPad *pad, gpointer data)
+{
+    (void) linkDynamicPadToElementSink(pad, GST_ELEMENT(data), "Audio decodebin output");
+}
+
+bool GstVideoReceiver::_wantsAudioPlayback() const
+{
+#if defined(Q_OS_IOS)
+    return false;
+#else
+    return true;
+#endif
 }
 
 bool GstVideoReceiver::_unlinkBranch(GstElement *from)
@@ -1396,13 +1693,21 @@ gboolean GstVideoReceiver::_onBusMessage(GstBus * /* bus */, GstMessage *msg, gp
         if (!collection) {
             break;
         }
-        // SELECT_STREAMS keeps decodebin3 from instantiating audio decoder branches.
+        const bool isVideoCollection = GST_MESSAGE_SRC(msg) == GST_OBJECT(pThis->_decoder);
+        const bool isAudioCollection = GST_MESSAGE_SRC(msg) == GST_OBJECT(pThis->_audioDecoder);
+        if (!isVideoCollection && !isAudioCollection) {
+            gst_object_unref(collection);
+            break;
+        }
         GList *selectedIds = nullptr;
         const guint nStreams = gst_stream_collection_get_size(collection);
         for (guint i = 0; i < nStreams; ++i) {
             GstStream *stream = gst_stream_collection_get_stream(collection, i);
             const GstStreamType type = gst_stream_get_stream_type(stream);
-            if (type & GST_STREAM_TYPE_VIDEO) {
+            if ((type & GST_STREAM_TYPE_VIDEO) && isVideoCollection) {
+                selectedIds = g_list_append(selectedIds,
+                    g_strdup(gst_stream_get_stream_id(stream)));
+            } else if ((type & GST_STREAM_TYPE_AUDIO) && isAudioCollection) {
                 selectedIds = g_list_append(selectedIds,
                     g_strdup(gst_stream_get_stream_id(stream)));
             }
