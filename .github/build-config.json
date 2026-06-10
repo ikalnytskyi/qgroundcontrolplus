@@ -35,15 +35,22 @@
     },
     "plugins": {
       "common": [
+        "alaw",
         "app",
+        "audioconvert",
+        "audioparsers",
+        "audioresample",
+        "autodetect",
         "coreelements",
         "dtls",
         "isomp4",
         "jpeg",
         "jpegformat",
+        "opus",
         "libav",
         "matroska",
         "mpegtsdemux",
+        "mulaw",
         "multifile",
         "nice",
         "opengl",
@@ -58,6 +65,7 @@
         "tcp",
         "typefindfunctions",
         "udp",
+        "volume",
         "videoparsersbad",
         "vpx",
         "videoconvertscale",
@@ -66,7 +74,8 @@
         "webrtc"
       ],
       "android": [
-        "androidmedia"
+        "androidmedia",
+        "opensles"
       ],
       "apple": [
         "applemedia"
@@ -75,10 +84,12 @@
         "d3d",
         "d3d11",
         "d3d12",
+        "directsound",
         "nvcodec"
       ],
       "linux": [
         "nvcodec",
+        "pulseaudio",
         "qsv",
         "va",
         "vulkan"
