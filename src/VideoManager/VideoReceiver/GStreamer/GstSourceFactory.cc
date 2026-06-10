@@ -18,6 +18,8 @@ namespace {
 constexpr guint64 kRtspTcpTimeoutUs = G_GUINT64_CONSTANT(5000000);
 constexpr int kRtspRetry = 3;
 constexpr int kUdpBufferSizeBytes = 8 * 1024 * 1024;
+constexpr const char* kSourceVideoParserName = "source-video-parser";
+constexpr const char* kSourceAudioParserName = "source-audio-parser";
 
 // Older Linux/system GStreamer needs an autoplug-query caps filter to keep parsebin on byte-stream output.
 #if defined(QGC_GST_ENABLE_LEGACY_PARSEBIN_CAPS_FILTER)
@@ -61,9 +63,38 @@ gboolean filterParserCaps([[maybe_unused]] GstElement* bin, [[maybe_unused]] Gst
 }
 #endif
 
+gchar* ghostPadNameForElementPad(GstElement* element, GstPad* pad)
+{
+    if (!pad) {
+        return nullptr;
+    }
+
+    gchar* padName = gst_pad_get_name(pad);
+    if (!padName) {
+        return nullptr;
+    }
+
+    if (!element) {
+        return padName;
+    }
+
+    const gchar* elementName = gst_element_get_name(element);
+    if (g_strcmp0(elementName, kSourceVideoParserName) == 0) {
+        g_free(padName);
+        return g_strdup("src_0");
+    }
+
+    if (g_strcmp0(elementName, kSourceAudioParserName) == 0) {
+        g_free(padName);
+        return g_strdup("src_1");
+    }
+
+    return padName;
+}
+
 void wrapWithGhostPad(GstElement* element, GstPad* pad, [[maybe_unused]] gpointer data)
 {
-    gchar* name = gst_pad_get_name(pad);
+    gchar* name = ghostPadNameForElementPad(element, pad);
     if (!name) {
         qCCritical(GstSourceFactoryLog) << "gst_pad_get_name() failed";
         return;
@@ -134,6 +165,109 @@ bool addStaticGhostPad(GstElement* element)
 bool validPort(int port)
 {
     return port > 0 && port <= 65535;
+}
+
+enum class SourcePadType {
+    Unknown,
+    Video,
+    Audio,
+};
+
+SourcePadType classifySourcePad(GstPad* pad)
+{
+    if (!pad) {
+        return SourcePadType::Unknown;
+    }
+
+    GstCaps* caps = gst_pad_query_caps(pad, nullptr);
+    if (caps && (gst_caps_get_size(caps) > 0)) {
+        const GstStructure* structure = gst_caps_get_structure(caps, 0);
+        if (structure) {
+            const gchar* mediaType = gst_structure_get_name(structure);
+            if (mediaType) {
+                if (g_str_has_prefix(mediaType, "video/")) {
+                    gst_clear_caps(&caps);
+                    return SourcePadType::Video;
+                }
+                if (g_str_has_prefix(mediaType, "audio/")) {
+                    gst_clear_caps(&caps);
+                    return SourcePadType::Audio;
+                }
+            }
+
+            const gchar* media = gst_structure_get_string(structure, "media");
+            if (media) {
+                if (g_strcmp0(media, "video") == 0) {
+                    gst_clear_caps(&caps);
+                    return SourcePadType::Video;
+                }
+                if (g_strcmp0(media, "audio") == 0) {
+                    gst_clear_caps(&caps);
+                    return SourcePadType::Audio;
+                }
+            }
+        }
+    }
+    gst_clear_caps(&caps);
+
+    gchar* name = gst_pad_get_name(pad);
+    if (!name) {
+        qCCritical(GstSourceFactoryLog) << "gst_pad_get_name() failed";
+        return SourcePadType::Unknown;
+    }
+
+    const bool isVideo = g_str_has_prefix(name, "video_");
+    const bool isAudio = g_str_has_prefix(name, "audio_");
+    g_clear_pointer(&name, g_free);
+    return isVideo ? SourcePadType::Video : (isAudio ? SourcePadType::Audio : SourcePadType::Unknown);
+}
+
+void routeRtspWhepPad(GstElement* element, GstPad* pad, gpointer /*data*/)
+{
+    GstObject* parent = gst_element_get_parent(GST_OBJECT(element));
+    if (!parent || !GST_IS_BIN(parent)) {
+        qCCritical(GstSourceFactoryLog) << "Unable to find RTSP/WHEP source bin parent for dynamic pad";
+        gst_clear_object(&parent);
+        return;
+    }
+
+    const SourcePadType padType = classifySourcePad(pad);
+    const char* targetName = nullptr;
+    const char* context = nullptr;
+    switch (padType) {
+    case SourcePadType::Video:
+        targetName = kSourceVideoParserName;
+        context = "Source video pad";
+        break;
+    case SourcePadType::Audio:
+        targetName = kSourceAudioParserName;
+        context = "Source audio pad";
+        break;
+    case SourcePadType::Unknown:
+        gst_clear_object(&parent);
+        return;
+    }
+
+    GstElement* target = gst_bin_get_by_name(GST_BIN(parent), targetName);
+    gst_clear_object(&parent);
+    if (!target) {
+        qCDebug(GstSourceFactoryLog) << context << "ignored because parser branch is unavailable";
+        return;
+    }
+
+    gchar* padName = gst_pad_get_name(pad);
+    if (!padName) {
+        qCCritical(GstSourceFactoryLog) << "gst_pad_get_name() failed";
+        gst_clear_object(&target);
+        return;
+    }
+
+    if (!gst_element_link_pads(element, padName, target, "sink")) {
+        qCWarning(GstSourceFactoryLog) << "gst_element_link_pads() failed for" << context;
+    }
+
+    g_clear_pointer(&padName, g_free);
+    gst_clear_object(&target);
 }
 
 }  // namespace
@@ -329,7 +463,6 @@ GstElement* buildWhepSource(const QString& uri, const QUrl& sourceUrl, const Con
 
     gst_child_proxy_set(GST_CHILD_PROXY(source), "signaller::whep-endpoint", whepEndpoint.constData(), nullptr);
     g_object_set(source, "do-retransmission", config.doRetransmission ? TRUE : FALSE, nullptr);
-    gst_util_set_object_arg(G_OBJECT(source), "audio-codecs", "< >");
 
     // QGC supports every codec in whepclientsrc's default list. This
     // restriction is precautionary as there was a concern that advertising the
@@ -549,6 +682,7 @@ GstElement* create(const QString& uri, const Config& config)
     // unconditional gst_clear_object cleanup at the bottom stays safe.
     GstElement* source = nullptr;
     GstElement* parser = nullptr;
+    GstElement* audioParser = nullptr;
     GstElement* rtpDepay = nullptr;
     GstElement* tsdemux = nullptr;
     GstElement* bin = nullptr;
@@ -576,7 +710,8 @@ GstElement* create(const QString& uri, const Config& config)
             break;
         }
 
-        parser = gst_element_factory_make(isUdpH265 ? "h265parse" : "parsebin", "parser");
+        parser = gst_element_factory_make(isUdpH265 ? "h265parse" : "parsebin",
+                                         (isRtsp || isWhep) ? kSourceVideoParserName : "parser");
         if (!parser) {
             qCCritical(GstSourceFactoryLog) << "gst_element_factory_make("
                                             << (isUdpH265 ? "'h265parse'" : "'parsebin'") << ") failed";
@@ -626,6 +761,29 @@ GstElement* create(const QString& uri, const Config& config)
         GstElement* binParser = parser;
         parser = nullptr;
 
+        if (isRtsp || isWhep) {
+            audioParser = gst_element_factory_make("parsebin", kSourceAudioParserName);
+            if (!audioParser) {
+                qCCritical(GstSourceFactoryLog) << "gst_element_factory_make('parsebin') failed for source audio";
+                break;
+            }
+
+            if (!gst_bin_add(GST_BIN(bin), audioParser)) {
+                qCCritical(GstSourceFactoryLog) << "gst_bin_add(audioParser) failed";
+                break;
+            }
+            GstElement* binAudioParser = audioParser;
+            audioParser = nullptr;
+
+            (void) g_signal_connect(upstream, "pad-added", G_CALLBACK(routeRtspWhepPad), nullptr);
+            (void) g_signal_connect(binParser, "pad-added", G_CALLBACK(wrapWithGhostPad), nullptr);
+            (void) g_signal_connect(binAudioParser, "pad-added", G_CALLBACK(wrapWithGhostPad), nullptr);
+
+            srcbin = bin;
+            bin = nullptr;
+            break;
+        }
+
         // Android can't determine MPEG2-TS via parsebin, so create tsdemux explicitly.
         if (isTcpMPEGTS || isUdpMPEGTS) {
             tsdemux = gst_element_factory_make("tsdemux", nullptr);
@@ -669,6 +827,7 @@ GstElement* create(const QString& uri, const Config& config)
 
     gst_clear_object(&bin);
     gst_clear_object(&parser);
+    gst_clear_object(&audioParser);
     gst_clear_object(&rtpDepay);
     gst_clear_object(&tsdemux);
     gst_clear_object(&source);

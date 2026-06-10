@@ -68,6 +68,7 @@ public slots:
     void stop() override;
     void startDecoding(void *sink) override;
     void stopDecoding() override;
+    void setAudioActive(bool active) override;
     void startRecording(const QString &videoFile, FILE_FORMAT format) override;
     void stopRecording() override;
     void takeScreenshot(const QString &imageFile) override;
@@ -87,6 +88,8 @@ private slots:
 private:
     GstElement *_makeDecoder();
     GstElement *_makeFileSink(const QString &videoFile, FILE_FORMAT format);
+    GstElement *_makeAudioSink(GstElement **audioMuteOut = nullptr);
+    bool _ensureAudioBranch();
 
     void _onNewSourcePad(GstPad *pad);
     void _onNewDecoderPad(GstPad *pad);
@@ -96,6 +99,7 @@ private:
     void _noteTeeFrame();
     void _noteVideoSinkFrame();
     void _noteEndOfStream();
+    bool _wantsAudioPlayback() const;
     /// -Unlink the branch from the src pad
     /// -Send an EOS event at the beginning of that branch
     bool _unlinkBranch(GstElement *from);
@@ -117,6 +121,7 @@ private:
 
     static gboolean _onBusMessage(GstBus *bus, GstMessage *message, gpointer user_data);
     static void _onNewPad(GstElement *element, GstPad *pad, gpointer data);
+    static void _onNewAudioDecoderPad(GstElement *element, GstPad *pad, gpointer data);
     static GstPadProbeReturn _teeProbe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
     static GstPadProbeReturn _videoSinkProbe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
     static GstPadProbeReturn _eosProbe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
@@ -124,9 +129,11 @@ private:
 
     GstElement *_decoder = nullptr;
     GstElement *_decoderValve = nullptr;
+    GstElement *_audioDecoder = nullptr;
     GstElement *_fileSink = nullptr;
     GstElement *_pipeline = nullptr;
     mutable QMutex _pipelineMutex;  // serializes _pipeline mutation (worker) vs read in _onBusMessage (streaming thread)
+    GstElement *_audioMute = nullptr;
     GstElement *_recorderValve = nullptr;
     GstElement *_source = nullptr;
     GstElement *_tee = nullptr;

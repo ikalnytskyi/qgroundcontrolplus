@@ -7,6 +7,8 @@ import QGroundControl.FlyView
 import QGroundControl.FlightMap
 
 ColumnLayout {
+    QGCPalette { id: qgcPal }
+
     spacing: ScreenTools.defaultFontPixelHeight / 2
 
     TerrainProgress {
@@ -27,6 +29,35 @@ ColumnLayout {
             id: photoVideoControlComponent
 
             PhotoVideoControl {
+            }
+        }
+    }
+
+    Rectangle {
+        Layout.alignment:       Qt.AlignRight
+        visible:                QGroundControl.videoManager.isStreamSource && !photoVideoControlLoader.item
+        width:                  audioIcon.height + (ScreenTools.defaultFontPixelWidth * 2)
+        height:                 audioIcon.height + ScreenTools.defaultFontPixelWidth
+        radius:                 ScreenTools.defaultFontPixelHeight / 2
+        color:                  Qt.rgba(qgcPal.window.r, qgcPal.window.g, qgcPal.window.b, 0.5)
+
+        QGCColoredImage {
+            id:                     audioIcon
+            anchors.centerIn:       parent
+            width:                  ScreenTools.defaultFontPixelHeight * 1.5
+            height:                 width
+            sourceSize.height:      height
+            fillMode:               Image.PreserveAspectFit
+            mipmap:                 true
+            smooth:                 true
+            color:                  "white"
+            source:                 QGroundControl.videoManager.audioMuted
+                                      ? "/InstrumentValueIcons/volume-off.svg"
+                                      : "/InstrumentValueIcons/volume-up.svg"
+
+            QGCMouseArea {
+                fillItem: parent
+                onClicked: QGroundControl.videoManager.toggleAudioMuted()
             }
         }
     }

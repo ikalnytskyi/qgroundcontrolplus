@@ -373,6 +373,25 @@ Rectangle {
                     onClicked: settingsDialogFactory.open()
                 }
             }
+
+            QGCColoredImage {
+                Layout.alignment: Qt.AlignHCenter
+                visible: QGroundControl.videoManager.isStreamSource
+                source: QGroundControl.videoManager.audioMuted
+                            ? "/InstrumentValueIcons/volume-off.svg"
+                            : "/InstrumentValueIcons/volume-up.svg"
+                mipmap: true
+                Layout.preferredHeight: ScreenTools.defaultFontPixelHeight * 1.5
+                Layout.preferredWidth: Layout.preferredHeight
+                sourceSize.height: Layout.preferredHeight
+                color: qgcPal.text
+                fillMode: Image.PreserveAspectFit
+
+                QGCMouseArea {
+                    fillItem: parent
+                    onClicked: QGroundControl.videoManager.toggleAudioMuted()
+                }
+            }
         }
 
         QGCPopupDialogFactory {
