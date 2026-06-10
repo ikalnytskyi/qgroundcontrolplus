@@ -466,7 +466,7 @@ ApplicationWindow {
                     id: qgcButton
                     objectName: "toolbar_qgcLogo"
                     height: parent.height
-                    icon.source: "/res/QGCLogoFull.svg"
+                    icon.source: "/res/RoverTechLogoFull.svg"
                     logo: true
                     onClicked: mainWindow.showToolSelectDialog()
                 }

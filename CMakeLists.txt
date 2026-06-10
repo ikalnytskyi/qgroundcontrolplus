@@ -311,6 +311,7 @@ set(QGC_APP_RESOURCES
     "${CMAKE_SOURCE_DIR}/resources/QGCLogoFull.svg"
     "${CMAKE_SOURCE_DIR}/resources/QGCLogoWhite.svg"
     "${CMAKE_SOURCE_DIR}/resources/QGCLogoArrow.svg"
+    "${CMAKE_SOURCE_DIR}/resources/RoverTechLogoFull.svg"
     "${CMAKE_SOURCE_DIR}/resources/rtl.svg"
     "${CMAKE_SOURCE_DIR}/resources/SplashScreen.png"
     "${CMAKE_SOURCE_DIR}/resources/takeoff.svg"
