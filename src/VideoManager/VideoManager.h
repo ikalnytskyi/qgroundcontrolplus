@@ -28,6 +28,7 @@ class VideoManager : public QObject
     Q_MOC_INCLUDE("Vehicle.h")
 
     Q_PROPERTY(bool     autoStreamConfigured    READ autoStreamConfigured                       NOTIFY autoStreamConfiguredChanged)
+    Q_PROPERTY(bool     audioMuted              READ audioMuted              WRITE setAudioMuted NOTIFY audioMutedChanged)
     Q_PROPERTY(bool     decoding                READ decoding                                   NOTIFY decodingChanged)
     Q_PROPERTY(bool     pipCamera1Decoding      READ pipCamera1Decoding                         NOTIFY pipCamera1DecodingChanged)
     Q_PROPERTY(bool     pipCamera2Decoding      READ pipCamera2Decoding                         NOTIFY pipCamera2DecodingChanged)
@@ -60,12 +61,14 @@ public:
     Q_INVOKABLE void startVideo();
     Q_INVOKABLE void stopRecording();
     Q_INVOKABLE void stopVideo();
+    Q_INVOKABLE void toggleAudioMuted() { setAudioMuted(!_audioMuted); }
 
     void init(QQuickWindow *mainWindow);
     void startVideoBackendInit();
     bool waitForVideoBackendReady(std::chrono::milliseconds timeout = std::chrono::minutes(1));
     void cleanup();
     bool autoStreamConfigured() const;
+    bool audioMuted() const { return _audioMuted; }
     bool decoding() const { return _decoding; }
     bool pipCamera1Decoding() const;
     bool pipCamera2Decoding() const;
@@ -84,11 +87,13 @@ public:
     QSize videoSize() const { return _videoSize; }
     QString imageFile() const { return _imageFile; }
     QString uvcVideoSourceID() const { return _uvcVideoSourceID; }
+    void setAudioMuted(bool muted) { if (muted != _audioMuted) { _audioMuted = muted; emit audioMutedChanged(_audioMuted); _updatePrimaryStreamAudio(); } }
     void setfullScreen(bool on);
 
 signals:
     void aspectRatioChanged();
     void autoStreamConfiguredChanged();
+    void audioMutedChanged(bool muted);
     void decodingChanged();
     void pipCamera1DecodingChanged();
     void pipCamera2DecodingChanged();
@@ -128,6 +133,7 @@ private:
     bool _updateUVC(VideoReceiver *receiver);
     bool _updateSettings(VideoReceiver *receiver);
     bool _updateVideoUri(VideoReceiver *receiver, const QString &uri);
+    void _updatePrimaryStreamAudio();
     void _restartAllVideos();
     void _restartVideo(VideoReceiver *receiver);
     void _startReceiver(VideoReceiver *receiver);
@@ -146,6 +152,7 @@ private:
     QFuture<bool> _backendInitFuture;
     bool _initialized = false;
     bool _backendDisabledForTests = false;
+    bool _audioMuted = false;
     bool _fullScreen = false;
 
     QAtomicInteger<bool> _decoding = false;
