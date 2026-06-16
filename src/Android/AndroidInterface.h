@@ -8,6 +8,7 @@
 
 namespace AndroidInterface {
 void setNativeMethods();
+void installBundledDefaultSettings();
 bool checkStoragePermissions();
 QString getSDCardPath();
 void setKeepScreenOn(bool on);
