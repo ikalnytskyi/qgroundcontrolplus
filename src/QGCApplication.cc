@@ -46,6 +46,10 @@
 #include "SerialLink.h"
 #endif
 
+#ifdef Q_OS_ANDROID
+#include "AndroidInterface.h"
+#endif
+
 QGC_LOGGING_CATEGORY(QGCApplicationLog, "API.QGCApplication")
 QGC_LOGGING_CATEGORY(QGCAppMessageLog, "API.QGCApplication.AppMessage")
 
@@ -97,6 +101,10 @@ QGCApplication::QGCApplication(int& argc, char* argv[], const QGCCommandLinePars
     setOrganizationName(QGC_ORG_NAME);
     setOrganizationDomain(QGC_ORG_DOMAIN);
     setApplicationVersion(QString(QGC_APP_VERSION_STR));
+
+#ifdef Q_OS_ANDROID
+    AndroidInterface::installBundledDefaultSettings();
+#endif
 
     // Set settings format
     QSettings::setDefaultFormat(QSettings::IniFormat);
