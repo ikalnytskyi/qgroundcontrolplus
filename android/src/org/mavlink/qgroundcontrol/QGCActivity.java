@@ -2,10 +2,12 @@ package org.mavlink.qgroundcontrol;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.Context;
+import android.content.res.AssetManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
@@ -254,6 +256,32 @@ public class QGCActivity extends QtActivity {
         return activity.m_storagePermissionController.getSDCardPath();
     }
 
+    public static boolean copyAssetToFile(final Context context, final String assetPath, final String destPath) {
+        if (context == null) {
+            QGCLogger.e(TAG, "copyAssetToFile: context is null");
+            return false;
+        }
+        if (assetPath == null || assetPath.isEmpty() || destPath == null || destPath.isEmpty()) {
+            QGCLogger.e(TAG, "copyAssetToFile: assetPath or destPath is empty");
+            return false;
+        }
+
+        final File outFile = new File(destPath);
+        final File parent = outFile.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            QGCLogger.e(TAG, "copyAssetToFile: failed to create parent directory: " + parent.getAbsolutePath());
+            return false;
+        }
+
+        try {
+            copyFile(context.getAssets(), assetPath, outFile);
+            return true;
+        } catch (IOException e) {
+            QGCLogger.e(TAG, "copyAssetToFile: failed to copy " + assetPath + " to " + destPath, e);
+            return false;
+        }
+    }
+
     /**
      * Checks and requests storage permissions for SD card access.
      * Android 11+ uses app-scoped storage and does not require runtime storage
@@ -271,6 +299,22 @@ public class QGCActivity extends QtActivity {
             activity.m_storagePermissionController = new QGCStoragePermissionController(activity);
         }
         return activity.m_storagePermissionController.checkStoragePermissions();
+    }
+
+    private static void copyFile(final AssetManager assetManager, final String assetPath, final File outFile) throws IOException {
+        if (outFile.exists()) {
+            outFile.delete();
+        }
+
+        try (InputStream in = assetManager.open(assetPath);
+             FileOutputStream out = new FileOutputStream(outFile)) {
+            final byte[] buffer = new byte[1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            out.flush();
+        }
     }
 
     /**

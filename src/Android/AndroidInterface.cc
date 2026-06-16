@@ -6,8 +6,10 @@
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDir>
 #include <QtCore/QFileInfo>
+#include <QtCore/QSettings>
 #include <QtCore/QJniEnvironment>
 #include <QtCore/QJniObject>
+#include <QtCore/qcoreapplication_platform.h>
 #include <QtCore/QMetaObject>
 #include <QtCore/QSharedPointer>
 #include <QtCore/QStandardPaths>
@@ -21,6 +23,8 @@
 QGC_LOGGING_CATEGORY(AndroidInterfaceLog, "Android.AndroidInterface")
 
 namespace AndroidInterface {
+
+static constexpr const char* kBundledSettingsAsset = "qgroundcontrol.ini";
 
 static std::function<void(const QString&)> s_importCallback;
 
@@ -133,6 +137,44 @@ void setNativeMethods()
         qCWarning(AndroidInterfaceLog) << "Failed to register native methods for" << kJniQGCActivityClassName;
     } else {
         qCDebug(AndroidInterfaceLog) << "Native Functions Registered";
+    }
+}
+
+void installBundledDefaultSettings()
+{
+    QSettings settings(QSettings::IniFormat, QSettings::UserScope, QCoreApplication::organizationName(), QCoreApplication::applicationName());
+    const QString settingsFile = settings.fileName();
+    if (QFileInfo::exists(settingsFile)) {
+        return;
+    }
+
+    const QFileInfo settingsFileInfo(settingsFile);
+    if (!QDir().mkpath(settingsFileInfo.absolutePath())) {
+        qCWarning(AndroidInterfaceLog) << "Failed to create settings directory for bundled defaults:" << settingsFileInfo.absolutePath();
+        return;
+    }
+
+    const QJniObject assetPath = QJniObject::fromString(QString::fromUtf8(kBundledSettingsAsset));
+    const QJniObject destPath = QJniObject::fromString(settingsFile);
+    const auto context = QNativeInterface::QAndroidApplication::context();
+    const jboolean copied = QJniObject::callStaticMethod<jboolean>(
+        kJniQGCActivityClassName,
+        "copyAssetToFile",
+        "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;)Z",
+        context.object<jobject>(),
+        assetPath.object<jstring>(),
+        destPath.object<jstring>());
+
+    QJniEnvironment env;
+    if (env.checkAndClearExceptions()) {
+        qCWarning(AndroidInterfaceLog) << "Exception while installing bundled default settings";
+        return;
+    }
+
+    if (copied) {
+        qCDebug(AndroidInterfaceLog) << "Installed bundled default settings:" << settingsFile;
+    } else {
+        qCWarning(AndroidInterfaceLog) << "Failed to install bundled default settings from asset:" << kBundledSettingsAsset;
     }
 }
 
