@@ -43,11 +43,19 @@ endif()
 
 # Pinned to 3.4.2: SDL 3.4.3+ changed the onNativePad{Down,Up} JNI signature, breaking the
 # customized Java glue vendored in android/src/org/libsdl/app/ (NoSuchMethodError at runtime).
+# QGC fork: patch SDL3's Android joystick handling (see patches/qgc-android-joystick.patch).
+# Applied at fetch time; idempotent (skips if already applied) so reconfigures don't fail.
+set(SDL3_PATCH_COMMAND "")
+if(ANDROID)
+    set(QGC_SDL3_ANDROID_PATCH "${CMAKE_CURRENT_LIST_DIR}/patches/qgc-android-joystick.patch")
+    set(SDL3_PATCH_COMMAND PATCH_COMMAND sh -c "git apply --reverse --check '${QGC_SDL3_ANDROID_PATCH}' 2>/dev/null || git apply --verbose '${QGC_SDL3_ANDROID_PATCH}'")
+endif()
 CPMAddPackage(
     NAME SDL3
     VERSION 3.4.2
     GITHUB_REPOSITORY libsdl-org/SDL
     GIT_TAG release-3.4.2
+    ${SDL3_PATCH_COMMAND}
     OPTIONS
         "SDL_INSTALL OFF"
         "SDL_UNINSTALL OFF"
