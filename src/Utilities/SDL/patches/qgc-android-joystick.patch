@@ -1,0 +1,28 @@
+QGC fork patch for SDL3 (release-3.4.2) — Android joystick handling for RC transmitters.
+
+A) Do not auto-classify Android joysticks as gamepads. Devices like OpenTX/EdgeTX
+   transmitters have >12 buttons, which makes getButtonMask() saturate to 0xFFFFFFFF and
+   fake the face-button bits, so SDL_CreateMappingForAndroidGamepad() would otherwise build
+   a bogus gamepad mapping. Disabling it makes SDL_IsGamepad() return false, so QGC opens
+   the device as a plain joystick and reads every button via SDL_GetJoystickButton().
+
+B) Map the Android BUTTON_1..16 keycodes to 0-based button indices (drop the "20 +"),
+   matching the desktop/evdev button order.
+
+--- a/src/joystick/SDL_gamepad.c
++++ b/src/joystick/SDL_gamepad.c
+@@ -966,5 +966,5 @@
+     } else if (SDL_IsJoystickVIRTUAL(guid)) {
+         // We'll pick up a robust mapping in VIRTUAL_JoystickGetGamepadMapping
+-#ifdef SDL_PLATFORM_ANDROID
++#if 0 /* QGC fork: never auto-classify Android joysticks (RC transmitters) as gamepads */
+     } else {
+         mapping = SDL_CreateMappingForAndroidGamepad(guid);
+--- a/src/joystick/android/SDL_sysjoystick.c
++++ b/src/joystick/android/SDL_sysjoystick.c
+@@ -155,4 +155,4 @@
+     case AKEYCODE_BUTTON_15:
+     case AKEYCODE_BUTTON_16:
+-        button = 20 + (keycode - AKEYCODE_BUTTON_1);
++        button = (keycode - AKEYCODE_BUTTON_1); /* QGC fork: 0-based to match desktop/Linux button order */
+         break;
