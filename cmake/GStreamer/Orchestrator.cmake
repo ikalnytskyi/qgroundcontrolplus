@@ -301,6 +301,10 @@ foreach(plugin IN LISTS GSTREAMER_PLUGINS)
     set(GST_PLUGIN_${plugin}_FOUND ${_gst_plugin_found})
 endforeach()
 
+if(NOT GStreamer_USE_STATIC_LIBS AND GST_PLUGIN_rswebrtc_FOUND)
+    target_compile_definitions(GStreamer::GStreamer INTERFACE QGC_GST_WHEP)
+endif()
+
 if(NOT GStreamer_USE_STATIC_LIBS AND NOT GStreamer_USE_XCFRAMEWORK AND EXISTS "${GSTREAMER_PLUGIN_PATH}")
     set(_gst_check_plugins "${GSTREAMER_PLUGINS}")
     gstreamer_filter_alternates(IN_OUT_PLUGINS _gst_check_plugins AVAILABLE ${_gst_available_basenames})

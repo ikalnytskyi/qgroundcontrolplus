@@ -21,6 +21,9 @@ DECLARE_SETTINGGROUP(Video, "Video")
     // Setup enum values for videoSource settings into meta data
     QVariantList videoSourceList;
     videoSourceList.append(videoSourceRTSP);
+#ifdef QGC_GST_WHEP
+    videoSourceList.append(videoSourceWHEP);
+#endif
     videoSourceList.append(videoSourceUDPH264);
     videoSourceList.append(videoSourceUDPH265);
     videoSourceList.append(videoSourceTCP);
@@ -221,6 +224,15 @@ DECLARE_SETTINGSFACT_NO_FUNC(VideoSettings, rtspUrl)
     return _rtspUrlFact;
 }
 
+DECLARE_SETTINGSFACT_NO_FUNC(VideoSettings, whepUrl)
+{
+    if (!_whepUrlFact) {
+        _whepUrlFact = _createSettingsFact(whepUrlName);
+        connect(_whepUrlFact, &Fact::valueChanged, this, &VideoSettings::_configChanged);
+    }
+    return _whepUrlFact;
+}
+
 DECLARE_SETTINGSFACT_NO_FUNC(VideoSettings, tcpUrl)
 {
     if (!_tcpUrlFact) {
@@ -255,6 +267,11 @@ bool VideoSettings::streamConfigured(void)
         qCDebug(VideoSettingsLog) << "Testing configuration for RTSP Stream:"
                                   << QGCNetworkHelper::redactedUrlForLogging(url);
         return !url.isEmpty();
+    }
+    //-- If WHEP, check for URL
+    if(vSource == videoSourceWHEP) {
+        qCDebug(VideoSettingsLog) << "Testing configuration for WHEP Stream:" << whepUrl()->rawValue().toString();
+        return !whepUrl()->rawValue().toString().isEmpty();
     }
     //-- If TCP, check for URL
     if(vSource == videoSourceTCP) {
