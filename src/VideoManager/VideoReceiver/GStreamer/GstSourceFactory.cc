@@ -334,6 +334,7 @@ GstElement* buildRtspSource(const QString& uri, const QUrl& sourceUrl, const Con
     return source;
 }
 
+#ifdef QGC_GST_WHEP
 GstElement* buildWhepSource(const QString& uri, const QUrl& sourceUrl, const Config& config)
 {
     const QByteArray whepEndpoint = uri.toUtf8();
@@ -353,6 +354,7 @@ GstElement* buildWhepSource(const QString& uri, const QUrl& sourceUrl, const Con
     gst_util_set_object_arg(G_OBJECT(source), "audio-codecs", "< >");
     return source;
 }
+#endif
 
 GstElement* buildTcpSource(const QUrl& sourceUrl)
 {
