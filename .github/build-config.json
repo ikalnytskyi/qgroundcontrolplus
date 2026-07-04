@@ -39,6 +39,8 @@
         "coreelements",
         "dtls",
         "isomp4",
+        "jpeg",
+        "jpegformat",
         "libav",
         "matroska",
         "mpegtsdemux",
