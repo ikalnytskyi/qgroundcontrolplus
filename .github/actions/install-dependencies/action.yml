@@ -146,6 +146,25 @@ runs:
         "${GITHUB_WORKSPACE}/.github/scripts/apt_install_retry.sh" \
           --install-timeout 300 --label "extra apt packages" "${packages[@]}"
 
+    - name: Install rswebrtc plugin globally (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get install -y --no-install-recommends gstreamer1.0-nice
+        rustup toolchain install stable
+        cargo install --locked cargo-c
+
+        gst_tag="0.9.3"
+        gst_plugins_dir="$(pkg-config --variable=pluginsdir gstreamer-1.0)"
+        gst_plugins_rs="$RUNNER_TEMP/gst-plugins-rs"
+
+        git clone --branch "$gst_tag" --depth 1 https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git "$gst_plugins_rs"
+        cd "$gst_plugins_rs/net/webrtc"
+        cargo cbuild --release --message-format=json \
+          | jq -r 'select(.reason == "compiler-artifact" and .target.name == "gstrswebrtc" and .filenames) | .filenames[] | select(endswith(".so"))' \
+          | xargs -I {} sudo install -m 0755 "{}" "$gst_plugins_dir/libgstrswebrtc.so"
+
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
       uses: nick-fields/retry@v4
@@ -154,4 +173,3 @@ runs:
         max_attempts: 3
         command: |
           python3 tools/setup/install_dependencies --platform macos
-
