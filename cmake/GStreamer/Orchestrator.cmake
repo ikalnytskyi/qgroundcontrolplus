@@ -293,7 +293,7 @@ foreach(plugin IN LISTS GSTREAMER_PLUGINS)
     set(GST_PLUGIN_${plugin}_FOUND ${_gst_plugin_found})
 endforeach()
 
-if(NOT GStreamer_USE_STATIC_LIBS AND GST_PLUGIN_rswebrtc_FOUND)
+if(GST_PLUGIN_rswebrtc_FOUND)
     target_compile_definitions(GStreamer::GStreamer INTERFACE QGC_GST_WHEP)
 endif()
 
