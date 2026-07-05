@@ -13,6 +13,7 @@
 #include "Vehicle.h"
 #include "VehicleLinkManager.h"
 #include "VideoReceiver.h"
+#include "Video2Settings.h"
 #include "VideoSettings.h"
 #include "UVCReceiver.h"
 #include "VideoBackend.h"
@@ -58,6 +59,17 @@ static VideoReceiver *_receiverForCameraIndex(const QList<VideoReceiver*> &recei
     return nullptr;
 }
 
+static VideoReceiver *_receiverForName(const QList<VideoReceiver*> &receivers, const QString &name)
+{
+    for (VideoReceiver *receiver : receivers) {
+        if (receiver->name() == name) {
+            return receiver;
+        }
+    }
+
+    return nullptr;
+}
+
 static constexpr const char *kFileExtension[VideoReceiver::FILE_FORMAT_MAX + 1] = {
     "mkv",
     "mov",
@@ -70,6 +82,7 @@ VideoManager::VideoManager(QObject *parent)
     : QObject(parent)
     , _subtitleWriter(new SubtitleWriter(this))
     , _videoSettings(SettingsManager::instance()->videoSettings())
+    , _video2Settings(SettingsManager::instance()->video2Settings())
 {
     qCDebug(VideoManagerLog) << this;
 
@@ -203,6 +216,11 @@ void VideoManager::init(QQuickWindow *mainWindow)
     (void) connect(_videoSettings->rtspUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->whepUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->tcpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->videoSource(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->udpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->rtspUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->whepUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
+    (void) connect(_video2Settings->tcpUrl(), &Fact::rawValueChanged, this, &VideoManager::_videoSourceChanged);
     (void) connect(_videoSettings->aspectRatio(), &Fact::rawValueChanged, this, &VideoManager::aspectRatioChanged);
     (void) connect(_videoSettings->lowLatencyMode(), &Fact::rawValueChanged, this, [this](const QVariant &value) { Q_UNUSED(value); _restartAllVideos(); });
     // rtpJitterLatencyMs needs a pipeline restart; route through _videoSourceChanged so _updateSettings
@@ -500,7 +518,9 @@ bool VideoManager::hasThermal() const
 
 bool VideoManager::hasVideo() const
 {
-    return (_videoSettings->streamEnabled()->rawValue().toBool() && _videoSettings->streamConfigured());
+    const bool primaryConfigured = (_videoSettings->streamEnabled()->rawValue().toBool() && _videoSettings->streamConfigured());
+    const bool secondaryConfigured = _video2Settings->streamConfigured();
+    return primaryConfigured || secondaryConfigured;
 }
 
 bool VideoManager::isUvc() const
@@ -750,27 +770,50 @@ bool VideoManager::_updateSettings(VideoReceiver *receiver)
     }
 
     if (receiver->isPipCamera()) {
-        // Only update the stream URI; never touch global video source settings.
+        // PiP cameras auto-follow MAVLink camera streams when available.
         settingsChanged |= _updateAutoStream(receiver);
+        if ((receiver->name() == QStringLiteral("pipCamera1Video")) && !receiver->videoStreamInfo()) {
+            settingsChanged |= _updateSettingsFromSource(
+                receiver,
+                _video2Settings->videoSource()->rawValue().toString(),
+                _video2Settings->udpUrl()->rawValue().toString(),
+                _video2Settings->rtspUrl()->rawValue().toString(),
+                _video2Settings->whepUrl()->rawValue().toString(),
+                _video2Settings->tcpUrl()->rawValue().toString());
+        }
         return settingsChanged;
     }
 
     settingsChanged |= _updateUVC(receiver);
     settingsChanged |= _updateAutoStream(receiver);
 
-    const QString source = _videoSettings->videoSource()->rawValue().toString();
+    settingsChanged |= _updateSettingsFromSource(
+        receiver,
+        _videoSettings->videoSource()->rawValue().toString(),
+        _videoSettings->udpUrl()->rawValue().toString(),
+        _videoSettings->rtspUrl()->rawValue().toString(),
+        _videoSettings->whepUrl()->rawValue().toString(),
+        _videoSettings->tcpUrl()->rawValue().toString());
+
+    return settingsChanged;
+}
+
+bool VideoManager::_updateSettingsFromSource(VideoReceiver *receiver, const QString &source, const QString &udpUrl, const QString &rtspUrl, const QString &whepUrl, const QString &tcpUrl)
+{
+    bool settingsChanged = false;
+
     if (source == VideoSettings::videoSourceUDPH264) {
-        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp://%1").arg(_videoSettings->udpUrl()->rawValue().toString()));
+        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp://%1").arg(udpUrl));
     } else if (source == VideoSettings::videoSourceUDPH265) {
-        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp265://%1").arg(_videoSettings->udpUrl()->rawValue().toString()));
+        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp265://%1").arg(udpUrl));
     } else if (source == VideoSettings::videoSourceMPEGTS) {
-        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("mpegts://%1").arg(_videoSettings->udpUrl()->rawValue().toString()));
+        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("mpegts://%1").arg(udpUrl));
     } else if (source == VideoSettings::videoSourceRTSP) {
-        settingsChanged |= _updateVideoUri(receiver, _videoSettings->rtspUrl()->rawValue().toString());
+        settingsChanged |= _updateVideoUri(receiver, rtspUrl);
     } else if (source == VideoSettings::videoSourceWHEP) {
-        settingsChanged |= _updateVideoUri(receiver, _videoSettings->whepUrl()->rawValue().toString());
+        settingsChanged |= _updateVideoUri(receiver, whepUrl);
     } else if (source == VideoSettings::videoSourceTCP) {
-        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("tcp://%1").arg(_videoSettings->tcpUrl()->rawValue().toString()));
+        settingsChanged |= _updateVideoUri(receiver, QStringLiteral("tcp://%1").arg(tcpUrl));
     } else if (source == VideoSettings::videoSource3DRSolo) {
         settingsChanged |= _updateVideoUri(receiver, QStringLiteral("udp://0.0.0.0:5600"));
     } else if (source == VideoSettings::videoSourceParrotDiscovery) {
@@ -785,7 +828,7 @@ bool VideoManager::_updateSettings(VideoReceiver *receiver)
         settingsChanged |= _updateVideoUri(receiver, QString());
     } else {
         settingsChanged |= _updateVideoUri(receiver, QString());
-        if (!isUvc()) {
+        if (!receiver->isPipCamera() && !isUvc()) {
             qCCritical(VideoManagerLog) << "Video source URI \"" << source << "\" is not supported. Please add support!";
         }
     }
@@ -920,16 +963,43 @@ void VideoManager::_startReceiver(VideoReceiver *receiver)
     receiver->start(timeout);
 }
 
-void VideoManager::_updatePrimaryStreamAudio()
+void VideoManager::setPrimaryAudioReceiver(const QString &receiverName)
 {
-    int primaryCameraIndex = 0;
-    if (_activeVehicle) {
-        if (const QGCCameraManager *cameraManager = _activeVehicle->cameraManager()) {
-            primaryCameraIndex = cameraManager->currentCamera();
-        }
+    if (_primaryAudioReceiverName == receiverName) {
+        return;
     }
 
-    VideoReceiver *primaryReceiver = _receiverForCameraIndex(_videoReceivers, primaryCameraIndex);
+    _primaryAudioReceiverName = receiverName;
+    _updatePrimaryStreamAudio();
+}
+
+void VideoManager::clearPrimaryAudioReceiver()
+{
+    if (_primaryAudioReceiverName.isEmpty()) {
+        return;
+    }
+
+    _primaryAudioReceiverName.clear();
+    _updatePrimaryStreamAudio();
+}
+
+void VideoManager::_updatePrimaryStreamAudio()
+{
+    VideoReceiver *primaryReceiver = nullptr;
+    if (!_primaryAudioReceiverName.isEmpty()) {
+        primaryReceiver = _receiverForName(_videoReceivers, _primaryAudioReceiverName);
+    }
+
+    if (!primaryReceiver) {
+        int primaryCameraIndex = 0;
+        if (_activeVehicle) {
+            if (const QGCCameraManager *cameraManager = _activeVehicle->cameraManager()) {
+                primaryCameraIndex = cameraManager->currentCamera();
+            }
+        }
+        primaryReceiver = _receiverForCameraIndex(_videoReceivers, primaryCameraIndex);
+    }
+
     for (VideoReceiver *receiver : std::as_const(_videoReceivers)) {
         receiver->setAudioActive(!_audioMuted && (receiver == primaryReceiver));
     }
