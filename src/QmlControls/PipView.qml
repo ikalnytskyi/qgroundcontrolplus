@@ -106,7 +106,7 @@ Item {
         id:             pipContent
         anchors.fill:   parent
         visible:        _isExpanded
-        clip:           true
+        clip:           false
     }
 
     MouseArea {
