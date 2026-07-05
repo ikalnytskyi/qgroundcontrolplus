@@ -19,6 +19,7 @@ class SubtitleWriter;
 class Vehicle;
 class VideoReceiver;
 class VideoSettings;
+class Video2Settings;
 
 class VideoManager : public QObject
 {
@@ -62,6 +63,8 @@ public:
     Q_INVOKABLE void stopRecording();
     Q_INVOKABLE void stopVideo();
     Q_INVOKABLE void toggleAudioMuted() { setAudioMuted(!_audioMuted); }
+    Q_INVOKABLE void setPrimaryAudioReceiver(const QString &receiverName);
+    Q_INVOKABLE void clearPrimaryAudioReceiver();
 
     void init(QQuickWindow *mainWindow);
     void startVideoBackendInit();
@@ -132,6 +135,7 @@ private:
     bool _updateAutoStream(VideoReceiver *receiver);
     bool _updateUVC(VideoReceiver *receiver);
     bool _updateSettings(VideoReceiver *receiver);
+    bool _updateSettingsFromSource(VideoReceiver *receiver, const QString &source, const QString &udpUrl, const QString &rtspUrl, const QString &whepUrl, const QString &tcpUrl);
     bool _updateVideoUri(VideoReceiver *receiver, const QString &uri);
     void _updatePrimaryStreamAudio();
     void _restartAllVideos();
@@ -143,6 +147,7 @@ private:
     QList<VideoReceiver*> _videoReceivers;
     SubtitleWriter *_subtitleWriter = nullptr;
     VideoSettings *_videoSettings = nullptr;
+    Video2Settings *_video2Settings = nullptr;
     QQuickWindow *_mainWindow = nullptr;
     Vehicle *_activeVehicle = nullptr;
 
@@ -164,6 +169,7 @@ private:
     QSize _videoSize;
     QString _imageFile;
     QString _uvcVideoSourceID;
+    QString _primaryAudioReceiverName;
 
 #ifdef QGC_UNITTEST_BUILD
     std::function<void()> _createVideoReceiversForTest;

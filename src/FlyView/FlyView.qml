@@ -112,8 +112,9 @@ Item {
             anchors.bottom:  _pipView.visible ? _pipView.top : parent.bottom
             anchors.margins: _toolsMargin
             pipView:         _pipView
+            videoControl:    videoControl
             visible:         _mainWindowIsMap
-                             && (QGroundControl.videoManager.decoding || _cameraCount > 0)
+                             && (QGroundControl.videoManager.decoding || _cameraCount > 0 || videoControl._manualVideo2Enabled)
                              && !QGroundControl.videoManager.fullScreen
             z:               QGroundControl.zOrderWidgets
         }
