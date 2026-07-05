@@ -86,6 +86,13 @@
             "visible": "QGroundControl.settingsManager.videoSettings.userVisible"
         },
         {
+            "name": "Video2",
+            "qml": "Video2Settings.qml",
+            "icon": "qrc:/InstrumentValueIcons/camera.svg",
+            "pageDefinition": "Video2.SettingsUI.json",
+            "visible": "QGroundControl.settingsManager.video2Settings.userVisible"
+        },
+        {
             "comment": "Deprecated: kept at the bottom pending removal in favor of the GeoMap engine",
             "name": "3D View",
             "qml": "Viewer3DSettings.qml",
