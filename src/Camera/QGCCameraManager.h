@@ -81,6 +81,7 @@ public:
     void setCurrentCamera(int sel);
     QGCVideoStreamInfo* currentStreamInstance();
     QGCVideoStreamInfo* thermalStreamInstance();
+    QGCVideoStreamInfo* streamInstanceForCamera(int cameraIndex);
 
     const QVariantList& cameraList() const;
 
