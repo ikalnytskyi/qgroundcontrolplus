@@ -1,0 +1,47 @@
+{
+    "version": 1,
+    "fileType": "SettingsUI",
+    "bindings": {
+        "videoSource": "QGroundControl.settingsManager.video2Settings.videoSource.rawValue",
+        "autoStreamConfig": "false",
+        "sourceDisabled": "videoSource === QGroundControl.settingsManager.video2Settings.disabledVideoSource",
+        "isStreamSource": "true"
+    },
+    "groups": [
+        {
+            "heading": "Video Source",
+            "keywords": ["video source", "camera", "stream"],
+            "enableWhen": "!autoStreamConfig",
+            "headingDescription": "autoStreamConfig ? qsTr(\"Mavlink camera stream is automatically configured\") : \"\"",
+            "controls": [
+                {
+                    "setting": "video2Settings.videoSource",
+                    "control": "combobox"
+                }
+            ]
+        },
+        {
+            "heading": "Connection",
+            "keywords": ["rtsp", "whep", "tcp", "udp", "mpegts", "video url", "stream url"],
+            "showWhen": "!sourceDisabled && !autoStreamConfig",
+            "controls": [
+                {
+                    "setting": "video2Settings.rtspUrl",
+                    "showWhen": "videoSource === QGroundControl.settingsManager.video2Settings.rtspVideoSource"
+                },
+                {
+                    "setting": "video2Settings.whepUrl",
+                    "showWhen": "videoSource === QGroundControl.settingsManager.video2Settings.whepVideoSource"
+                },
+                {
+                    "setting": "video2Settings.tcpUrl",
+                    "showWhen": "videoSource === QGroundControl.settingsManager.video2Settings.tcpVideoSource"
+                },
+                {
+                    "setting": "video2Settings.udpUrl",
+                    "showWhen": "videoSource === QGroundControl.settingsManager.video2Settings.udp264VideoSource || videoSource === QGroundControl.settingsManager.video2Settings.udp265VideoSource || videoSource === QGroundControl.settingsManager.video2Settings.mpegtsVideoSource"
+                }
+            ]
+        }
+    ]
+}
