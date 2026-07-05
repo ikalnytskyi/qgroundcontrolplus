@@ -37,9 +37,11 @@ qt_add_qml_module(FlyViewModule
         FlyViewToolStrip.qml
         FlyViewToolStripActionList.qml
 
+        FlyViewPipCameras.qml
         FlyViewTopRightColumnLayout.qml
         FlyViewTopRightPanel.qml
         FlyViewVideo.qml
+        FlyViewVideos.qml
         FlyViewWidgetLayer.qml
         GuidedActionConfirm.qml
         GuidedActionLand.qml
