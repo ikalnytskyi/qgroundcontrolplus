@@ -21,6 +21,7 @@
 #include "UnitsSettings.h"
 #include "NTRIPSettings.h"
 #include "VideoSettings.h"
+#include "Video2Settings.h"
 #include "MavlinkSettings.h"
 #include "JoystickManagerSettings.h"
 #include "LogManagerSettings.h"
@@ -74,6 +75,7 @@ void SettingsManager::init()
     _rtkSettings = new RTKSettings(this);
     _ntripSettings = new NTRIPSettings(this);
     _videoSettings = new VideoSettings(this);
+    _video2Settings = new Video2Settings(this);
     _mavlinkSettings = new MavlinkSettings(this);
     _joystickManagerSettings = new JoystickManagerSettings(this);
     _logManagerSettings = new LogManagerSettings(this);
@@ -103,6 +105,7 @@ RTKSettings *SettingsManager::rtkSettings() const { return _rtkSettings; }
 UnitsSettings *SettingsManager::unitsSettings() const { return _unitsSettings; }
 NTRIPSettings *SettingsManager::ntripSettings() const { return _ntripSettings; }
 VideoSettings *SettingsManager::videoSettings() const { return _videoSettings; }
+Video2Settings *SettingsManager::video2Settings() const { return _video2Settings; }
 MavlinkSettings *SettingsManager::mavlinkSettings() const { return _mavlinkSettings; }
 JoystickManagerSettings *SettingsManager::joystickManagerSettings() const { return _joystickManagerSettings; }
 LogManagerSettings *SettingsManager::logManagerSettings() const { return _logManagerSettings; }

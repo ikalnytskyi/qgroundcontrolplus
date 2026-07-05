@@ -29,6 +29,7 @@ set(_generated_qml_names
     RemoteIDSettings.qml
     SettingsPagesModel.qml
     TelemetrySettings.qml
+    Video2Settings.qml
     VideoSettings.qml
     Viewer3DSettings.qml
 )
