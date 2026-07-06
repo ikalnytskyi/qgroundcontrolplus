@@ -191,6 +191,151 @@ jobs:
             -DQT_HOST_PATH=${{ steps.setup.outputs.host_qt_root_dir }}
             -DQT_ANDROID_SIGN_APK=ON
 
+      - name: Resolve GStreamer root
+        id: gst-root
+        shell: bash
+        run: |
+          python3 "${GITHUB_WORKSPACE}/.github/scripts/cmake_helper.py" cache-var \
+            --build-dir "${RUNNER_TEMP}/build" \
+            --name GStreamer_ROOT_DIR \
+            --required \
+            --output-key gst_root
+          python3 "${GITHUB_WORKSPACE}/tools/setup/read_config.py" --get android.min_sdk >> "${RUNNER_TEMP}/android-min-sdk.txt"
+          echo "android_min_sdk=$(cat "${RUNNER_TEMP}/android-min-sdk.txt")" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Rust toolchain (rswebrtc)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Build rswebrtc from source
+        shell: bash
+        env:
+          GST_ROOT: ${{ steps.gst-root.outputs.gst_root }}
+          QT_ANDROID_ABIS: ${{ env.QT_ANDROID_ABIS }}
+          ANDROID_MIN_SDK: ${{ steps.gst-root.outputs.android_min_sdk }}
+        run: |
+          set -euo pipefail
+          cargo install --locked cargo-c
+
+          gst_plugins_rs="$RUNNER_TEMP/gst-plugins-rs"
+          rm -rf "$gst_plugins_rs"
+          git clone --branch feat/webrtc-pcma-pcmu --depth 1 https://gitlab.freedesktop.org/ikalnytskyi/gst-plugins-rs.git "$gst_plugins_rs"
+          echo "Using Android min SDK ${ANDROID_MIN_SDK} for rswebrtc toolchain"
+
+          gst_sdk_root="$(dirname "$GST_ROOT")"
+          case "$RUNNER_OS" in
+            Linux)
+              ndk_host_tag="linux-x86_64"
+              ;;
+            macOS)
+              if [[ "$(uname -m)" == "arm64" ]]; then
+                ndk_host_tag="darwin-arm64"
+                if [[ ! -d "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$ndk_host_tag" ]]; then
+                  ndk_host_tag="darwin-x86_64"
+                fi
+              else
+                ndk_host_tag="darwin-x86_64"
+              fi
+              ;;
+            Windows)
+              ndk_host_tag="windows-x86_64"
+              ;;
+            *)
+              echo "::error::Unsupported runner OS for Android rswebrtc build: $RUNNER_OS"
+              exit 1
+              ;;
+          esac
+          ndk_prebuilt="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$ndk_host_tag"
+          if [[ -z "$ndk_prebuilt" ]]; then
+            echo "::error::Android NDK LLVM toolchain not found under $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt"
+            exit 1
+          fi
+          if [[ ! -d "$ndk_prebuilt" ]]; then
+            echo "::error::Android NDK LLVM toolchain path does not exist: $ndk_prebuilt"
+            exit 1
+          fi
+
+          pkg_config_exe="pkg-config"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            pkg_config_exe="pkg-config.exe"
+            pkg_config_sep=';'
+          else
+            pkg_config_sep=':'
+          fi
+
+          IFS=';' read -r -a android_abis <<< "$QT_ANDROID_ABIS"
+          for abi in "${android_abis[@]}"; do
+            case "$abi" in
+              arm64-v8a)
+                abi_dir="arm64"
+                rust_target="aarch64-linux-android"
+                clang="$ndk_prebuilt/bin/aarch64-linux-android${ANDROID_MIN_SDK}-clang"
+                ar="$ndk_prebuilt/bin/llvm-ar"
+                export CC_aarch64_linux_android="$clang"
+                export AR_aarch64_linux_android="$ar"
+                target_env="CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"
+                ;;
+              armeabi-v7a)
+                abi_dir="armv7"
+                rust_target="armv7-linux-androideabi"
+                clang="$ndk_prebuilt/bin/armv7a-linux-androideabi${ANDROID_MIN_SDK}-clang"
+                ar="$ndk_prebuilt/bin/llvm-ar"
+                export CC_armv7_linux_androideabi="$clang"
+                export AR_armv7_linux_androideabi="$ar"
+                target_env="CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER"
+                ;;
+              x86_64)
+                abi_dir="x86_64"
+                rust_target="x86_64-linux-android"
+                clang="$ndk_prebuilt/bin/x86_64-linux-android${ANDROID_MIN_SDK}-clang"
+                ar="$ndk_prebuilt/bin/llvm-ar"
+                export CC_x86_64_linux_android="$clang"
+                export AR_x86_64_linux_android="$ar"
+                target_env="CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER"
+                ;;
+              *)
+                echo "::error::Unsupported Android ABI for rswebrtc build: $abi"
+                exit 1
+                ;;
+            esac
+
+            export "$target_env=$clang"
+
+            gst_prefix="${gst_sdk_root}/${abi_dir}"
+            export PKG_CONFIG="$pkg_config_exe"
+            export PKG_CONFIG_ALLOW_CROSS=1
+            export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
+            export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
+            export PKG_CONFIG_PATH=""
+            export PKG_CONFIG_LIBDIR="$gst_prefix/lib/pkgconfig${pkg_config_sep}$gst_prefix/lib/gstreamer-1.0/pkgconfig"
+
+            if [[ "$RUNNER_OS" == "Windows" ]]; then
+              export PKG_CONFIG="$gst_prefix/share/gst-android/ndk-build/tools/windows/pkg-config.exe"
+            fi
+
+            cargo cinstall \
+              --manifest-path "$gst_plugins_rs/net/webrtc/Cargo.toml" \
+              --release \
+              --target "$rust_target" \
+              --prefix "$gst_prefix" \
+              --library-type staticlib
+          done
+
+      - name: Reconfigure after rswebrtc build
+        uses: ./.github/actions/cmake-configure
+        with:
+          build-dir: ${{ runner.temp }}/build
+          build-type: ${{ env.BUILD_TYPE }}
+          use-qt-cmake: 'false'
+          extra-args: >-
+            -DCMAKE_WARN_DEPRECATED=FALSE
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup.outputs.target_qt_root_dir }}/lib/cmake/Qt6/qt.toolchain.cmake
+            -DCMAKE_PREFIX_PATH=${{ steps.setup.outputs.target_qt_root_dir }}
+            -DQT_ANDROID_ABIS=${{ env.QT_ANDROID_ABIS }}
+            -DQT_HOST_PATH=${{ steps.setup.outputs.host_qt_root_dir }}
+            -DQT_ANDROID_SIGN_APK=ON
+
       - name: Build
         id: build
         continue-on-error: ${{ matrix.emulator }}
