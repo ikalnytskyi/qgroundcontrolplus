@@ -39,6 +39,39 @@ FirmwarePlugin::~FirmwarePlugin()
     qCDebug(FirmwarePluginLog) << this;
 }
 
+void FirmwarePlugin::initializeVehicle(Vehicle* vehicle)
+{
+    if (vehicle->isOfflineEditingVehicle()) {
+        return;
+    }
+
+    QObject::connect(vehicle, &Vehicle::initialConnectComplete, vehicle, [vehicle]() {
+        if (vehicle->isMavCommandPending(vehicle->defaultComponentId(), MAV_CMD_REQUEST_MESSAGE)) {
+            return;
+        }
+
+        const SharedLinkInterfacePtr sharedLink = vehicle->vehicleLinkManager()->primaryLink().lock();
+        if (!sharedLink) {
+            return;
+        }
+
+        mavlink_message_t message{};
+        mavlink_msg_command_long_pack_chan(
+            MAVLinkProtocol::instance()->getSystemId(),
+            MAVLinkProtocol::getComponentId(),
+            sharedLink->mavlinkChannel(),
+            &message,
+            vehicle->id(),
+            vehicle->defaultComponentId(),
+            MAV_CMD_REQUEST_MESSAGE,
+            0,
+            MAVLINK_MSG_ID_RELAY_STATUS,
+            0, 0, 0, 0, 0, 0);
+
+        (void) vehicle->sendMessageOnLinkThreadSafe(sharedLink.get(), message);
+    }, Qt::SingleShotConnection);
+}
+
 AutoPilotPlugin *FirmwarePlugin::autopilotPlugin(Vehicle *vehicle) const
 {
     return new GenericAutoPilotPlugin(vehicle, vehicle);
