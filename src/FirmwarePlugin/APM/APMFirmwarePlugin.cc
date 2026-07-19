@@ -501,6 +501,8 @@ APMFirmwarePlugin::FirmwareParameterHeader APMFirmwarePlugin::_parseParamsHeader
 
 void APMFirmwarePlugin::initializeVehicle(Vehicle *vehicle)
 {
+    FirmwarePlugin::initializeVehicle(vehicle);
+
     if (vehicle->isOfflineEditingVehicle()) {
         const QString offlineParameterFile = offlineEditingParamFile(vehicle);
         const APMFirmwarePlugin::FirmwareParameterHeader offlineParameterHeader = _parseParamsHeader(offlineParameterFile);

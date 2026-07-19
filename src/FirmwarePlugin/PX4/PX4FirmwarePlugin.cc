@@ -182,6 +182,7 @@ bool PX4FirmwarePlugin::isCapable(const Vehicle *vehicle, FirmwareCapabilities c
 
 void PX4FirmwarePlugin::initializeVehicle(Vehicle* vehicle)
 {
+    FirmwarePlugin::initializeVehicle(vehicle);
     vehicle->setFirmwarePluginInstanceData(new PX4FirmwarePluginInstanceData);
 }
 
