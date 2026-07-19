@@ -14,7 +14,7 @@ Rectangle {
     height: mainLayout.height + (_smallMargins * 2)
     color: Qt.rgba(qgcPal.window.r, qgcPal.window.g, qgcPal.window.b, 0.5)
     radius: _margins
-    visible: _camera.capturesVideo || _camera.capturesPhotos || _camera.hasTracking || _camera.hasVideoStream
+    visible: _camera.capturesVideo || _camera.capturesPhotos || _camera.hasTracking || _camera.hasVideoStream || _activeVehicle.relayPresent
 
     property real _margins: ScreenTools.defaultFontPixelHeight / 2
     property real _smallMargins: ScreenTools.defaultFontPixelWidth / 2
@@ -390,6 +390,66 @@ Rectangle {
                 QGCMouseArea {
                     fillItem: parent
                     onClicked: QGroundControl.videoManager.toggleAudioMuted()
+                }
+            }
+
+            ColumnLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 0
+                visible: photoVideoControl._activeVehicle.relayPresent !== 0
+
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: _smallMargins
+                    Layout.bottomMargin: _smallMargins
+                    Layout.preferredWidth: ScreenTools.defaultFontPixelWidth * 6
+                    Layout.preferredHeight: 1
+                    color: qgcPal.text
+                    opacity: 0.5
+                }
+
+                QGCLabel {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.bottomMargin: _smallMargins
+                    text: qsTr("Relays")
+                    font.bold: true
+                }
+
+                Repeater {
+                    model: 16
+
+                    Item {
+                        id: relayControl
+
+                        readonly property int relayNumber: index
+                        readonly property bool relayOn: (photoVideoControl._activeVehicle.relayOn & (1 << index)) !== 0
+
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: relayContent.width
+                        Layout.preferredHeight: relayContent.height
+                        Layout.bottomMargin: ScreenTools.defaultFontPixelHeight * 0.4
+                        visible: (photoVideoControl._activeVehicle.relayPresent & (1 << index)) !== 0
+
+                        Row {
+                            id: relayContent
+
+                            anchors.top: parent.top
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            spacing: _smallMargins
+
+                            QGCLabel {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: relayControl.relayNumber
+                                font.pointSize: ScreenTools.defaultFontPointSize * 0.75
+                                font.bold: true
+                            }
+
+                            QGCCheckBoxSlider {
+                                checked: relayControl.relayOn
+                                onClicked: photoVideoControl._activeVehicle.toggleRelay(relayControl.relayNumber)
+                            }
+                        }
+                    }
                 }
             }
         }

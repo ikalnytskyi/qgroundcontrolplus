@@ -678,6 +678,9 @@ void Vehicle::_mavlinkMessageReceived(LinkInterface* link, mavlink_message_t mes
     case MAVLINK_MSG_ID_FENCE_STATUS:
         _handleFenceStatus(message);
         break;
+    case MAVLINK_MSG_ID_RELAY_STATUS:
+        _handleRelayStatus(message);
+        break;
 
     case MAVLINK_MSG_ID_EVENT:
     case MAVLINK_MSG_ID_CURRENT_EVENT_SEQUENCE:
@@ -2161,6 +2164,16 @@ void Vehicle::sendCommand(int compId, int command, bool showError, double param1
                 static_cast<float>(param7));
 }
 
+void Vehicle::toggleRelay(int relayNumber)
+{
+    if (relayNumber < 0 || relayNumber >= 16 || !(_relayPresent & (1u << relayNumber))) {
+        return;
+    }
+
+    sendMavCommand(defaultComponentId(), MAV_CMD_DO_SET_RELAY, true, relayNumber,
+                   (_relayOn & (1u << relayNumber)) ? 0.0f : 1.0f);
+}
+
 void Vehicle::sendMavCommandWithHandler(const MavCmdAckHandlerInfo_t* ackHandlerInfo, int compId, MAV_CMD command, float param1, float param2, float param3, float param4, float param5, float param6, float param7)
 {
     _mavCmdQueue->sendCommandWithHandler(ackHandlerInfo, compId, command, param1, param2, param3, param4, param5, param6, param7);
@@ -2891,6 +2904,18 @@ void Vehicle::_handleFenceStatus(const mavlink_message_t& message)
         }
     } else {
         lastUpdate = now;
+    }
+}
+
+void Vehicle::_handleRelayStatus(const mavlink_message_t& message)
+{
+    mavlink_relay_status_t relayStatus;
+    mavlink_msg_relay_status_decode(&message, &relayStatus);
+
+    if (_relayPresent != relayStatus.present || _relayOn != relayStatus.on) {
+        _relayPresent = relayStatus.present;
+        _relayOn = relayStatus.on;
+        emit relayStatusChanged();
     }
 }
 

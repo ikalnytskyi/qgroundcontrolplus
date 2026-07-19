@@ -39,6 +39,17 @@ FirmwarePlugin::~FirmwarePlugin()
     qCDebug(FirmwarePluginLog) << this;
 }
 
+void FirmwarePlugin::initializeVehicle(Vehicle* vehicle)
+{
+    if (vehicle->isOfflineEditingVehicle()) {
+        return;
+    }
+
+    vehicle->sendMavCommand(vehicle->defaultComponentId(), MAV_CMD_REQUEST_MESSAGE,
+                            false,  // show error
+                            MAVLINK_MSG_ID_RELAY_STATUS);
+}
+
 AutoPilotPlugin *FirmwarePlugin::autopilotPlugin(Vehicle *vehicle) const
 {
     return new GenericAutoPilotPlugin(vehicle, vehicle);
