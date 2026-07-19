@@ -193,6 +193,8 @@ public:
     Q_PROPERTY(QString              vehicleImageOpaque          READ vehicleImageOpaque                                             CONSTANT)
     Q_PROPERTY(QString              vehicleImageOutline         READ vehicleImageOutline                                            CONSTANT)
     Q_PROPERTY(QVariantList         toolIndicators              READ toolIndicators                                                 NOTIFY toolIndicatorsChanged)
+    Q_PROPERTY(int                  relayPresent                READ relayPresent                                                   NOTIFY relayStatusChanged)
+    Q_PROPERTY(int                  relayOn                     READ relayOn                                                        NOTIFY relayStatusChanged)
     Q_PROPERTY(bool              initialPlanRequestComplete     READ initialPlanRequestComplete                                     NOTIFY initialPlanRequestCompleteChanged)
     Q_PROPERTY(QString              hobbsMeter                  READ hobbsMeter                                                     NOTIFY hobbsMeterChanged)
     Q_PROPERTY(bool                 inFwdFlight                 READ inFwdFlight                                                    NOTIFY inFwdFlightChanged)
@@ -617,6 +619,8 @@ public:
     /// Same as sendMavCommand but available from Qml.
     Q_INVOKABLE void sendCommand(int compId, int command, bool showError, double param1 = 0.0, double param2 = 0.0, double param3 = 0.0, double param4 = 0.0, double param5 = 0.0, double param6 = 0.0, double param7 = 0.0);
 
+    Q_INVOKABLE void toggleRelay(int relayNumber);
+
     static QString mavCmdResultFailureCodeToString(MavCmdResultFailureCode_t failureCode);
 
     // MavCmdProgressHandler, MavCmdResultHandler, MavCmdAckHandlerInfo_t are inherited from VehicleTypes.
@@ -707,6 +711,8 @@ public:
     QString vehicleImageOutline () const;
 
     const QVariantList&         toolIndicators();
+    int                         relayPresent() const { return _relayPresent; }
+    int                         relayOn() const { return _relayOn; }
 
     bool capabilitiesKnown      () const { return _capabilityBitsKnown; }
     uint64_t capabilityBits     () const { return _capabilityBits; }    // Change signalled by capabilityBitsChanged
@@ -777,6 +783,7 @@ signals:
     void initialPlanRequestCompleteChanged(bool initialPlanRequestComplete);
     void capabilityBitsChanged          (uint64_t capabilityBits);
     void toolIndicatorsChanged          ();
+    void relayStatusChanged             ();
     void checkListStateChanged          ();
     void longitudeChanged               ();
     void currentConfigChanged           ();
@@ -884,6 +891,7 @@ private:
     void _handleGimbalOrientation       (const mavlink_message_t& message);
     void _handleObstacleDistance        (const mavlink_message_t& message);
     void _handleFenceStatus             (const mavlink_message_t& message);
+    void _handleRelayStatus             (const mavlink_message_t& message);
 
     // ArduPilot dialect messages
     void _handleCameraFeedback          (const mavlink_message_t& message);
@@ -1053,6 +1061,9 @@ private:
     std::unique_ptr<QGCMapCircle> _orbitMapCircle;
     QTimer          _orbitTelemetryTimer;
     static const int _orbitTelemetryTimeoutMsecs = 3000; // No telemetry for this amount and orbit will go inactive
+
+    uint16_t        _relayPresent = 0;
+    uint16_t        _relayOn = 0;
 
     std::unique_ptr<MAVLinkStreamConfig> _mavlinkStreamConfig;
 
