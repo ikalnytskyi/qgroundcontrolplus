@@ -121,7 +121,7 @@ public:
     virtual AutoPilotPlugin *autopilotPlugin(Vehicle *vehicle) const;
 
     /// Called when Vehicle is first created to perform any firmware specific setup.
-    virtual void initializeVehicle(Vehicle* /*vehicle*/) {}
+    virtual void initializeVehicle(Vehicle* vehicle);
 
     /// @return true: Firmware supports all specified capabilites
     virtual bool isCapable(const Vehicle* /*vehicle*/, FirmwareCapabilities /*capabilities*/) const { return false; }

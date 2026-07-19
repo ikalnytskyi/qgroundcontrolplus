@@ -182,7 +182,7 @@ void RequestMetaDataTypeStateMachineTest::_requestSkipsCompInfoOnHighLatencyLink
     }
 
     QCOMPARE(completeSpy.count(), 1);
-    QCOMPARE(_mockLink->receivedMavCommandCount(MAV_CMD_REQUEST_MESSAGE), 0);
+    QCOMPARE(_mockLink->receivedRequestMessageCount(MAV_COMP_ID_AUTOPILOT1, MAVLINK_MSG_ID_COMPONENT_METADATA), 0);
     QVERIFY(!requestMachine.active());
 
     _disconnectMockLink();
