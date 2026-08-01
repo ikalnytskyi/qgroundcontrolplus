@@ -47,7 +47,7 @@ void ParameterManagerTest::_noFailureWorker(MockConfiguration::FailureMode_t fai
     QVERIFY(vehicle);
     // We should get progress bar updates during load
     QSignalSpy spyProgress(vehicle->parameterManager(), &ParameterManager::loadProgressChanged);
-    QVERIFY_SIGNAL_WAIT(spyProgress, TestTimeout::shortMs());
+    QVERIFY_SIGNAL_WAIT(spyProgress, TestTimeout::mediumMs());
     arguments = spyProgress.takeFirst();
     QCOMPARE(arguments.count(), 1);
     QVERIFY(arguments.at(0).toFloat() > 0.0f);

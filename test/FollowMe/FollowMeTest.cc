@@ -22,10 +22,12 @@ void FollowMeTest::_testFollowMe()
     _connectMockLinkNoInitialConnectSequence();
     MultiVehicleManager* vehicleMgr = MultiVehicleManager::instance();
     Vehicle* vehicle = vehicleMgr->activeVehicle();
+    expectAppMessage(QRegularExpression(QStringLiteral("MAV_CMD_DO_SET_MODE.*not supported")));
     vehicle->setFlightMode(vehicle->followFlightMode());
     SettingsManager::instance()->appSettings()->followTarget()->setRawValue(1);
     QSignalSpy spyGCSMotionReport(vehicle, &Vehicle::messagesSentChanged);
     QVERIFY_SIGNAL_WAIT(spyGCSMotionReport, TestTimeout::mediumMs());
+    verifyExpectedLogMessage();
     _disconnectMockLink();
 }
 
