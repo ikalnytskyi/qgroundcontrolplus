@@ -29,9 +29,9 @@ using GstD3DVideoBufferCommon::StagingKeyHash;
 
 MapDiagnostics s_diag;
 
-/// Caches a small ring of staging ID3D11Texture2D per (size, format, plane); acquire() rotates through the ring so a
-/// new frame's CopySubresourceRegion never lands on the texture a reused QRhi view may still be sampling (D3D11 has no
-/// fence against QRhi's frame boundary). Pool keeps one ref per texture; acquire() returns an extra AddRef'd ref.
+/// Caches a small ring of staging ID3D11Texture2D per source resource and layout; acquire() rotates through the ring so
+/// a new frame's CopySubresourceRegion never lands on the texture a reused QRhi view may still be sampling (D3D11 has
+/// no fence against QRhi's frame boundary). Pool keeps one ref per texture; acquire() returns an extra AddRef'd ref.
 /// Bounded to cap memory under resolution churn.
 class StagingTexturePool
 {
@@ -117,7 +117,8 @@ ID3D11Texture2D* copySliceToStaging(ID3D11Texture2D* tex, guint subIdx, int plan
     dstDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
     dstDesc.MiscFlags = 0;
     dstDesc.MipLevels = 1;
-    const StagingKey key{srcDesc.Width, srcDesc.Height, UINT(srcDesc.Format), planeIdx};
+    const StagingKey key{
+        reinterpret_cast<quintptr>(tex), srcDesc.Width, srcDesc.Height, UINT(srcDesc.Format), planeIdx};
     ID3D11Texture2D* stagingTex = StagingTexturePool::instance().acquire(d3dDev, key, dstDesc, planeIdx, subIdx);
     if (!stagingTex) {
         return nullptr;
