@@ -66,10 +66,11 @@ struct MapDiagnostics : GstHw::MapDiagnostics
     }
 };
 
-/// Pool key: a staging resource is reusable only for an identical (size, format, plane) layout. width is UINT64 to hold
-/// D3D12_RESOURCE_DESC::Width; D3D11's UINT widens losslessly.
+/// Pool key: a staging resource is reusable only for the same source resource and an identical (size, format, plane)
+/// layout. width is UINT64 to hold D3D12_RESOURCE_DESC::Width; D3D11's UINT widens losslessly.
 struct StagingKey
 {
+    quintptr source = 0;
     quint64 width = 0;
     quint32 height = 0;
     quint32 format = 0;  // DXGI_FORMAT
@@ -77,7 +78,8 @@ struct StagingKey
 
     bool operator<(const StagingKey& o) const
     {
-        return std::tie(width, height, format, plane) < std::tie(o.width, o.height, o.format, o.plane);
+        return std::tie(source, width, height, format, plane) <
+               std::tie(o.source, o.width, o.height, o.format, o.plane);
     }
 
     bool operator==(const StagingKey& o) const noexcept = default;
@@ -87,7 +89,8 @@ struct StagingKeyHash
 {
     std::size_t operator()(const StagingKey& key) const noexcept
     {
-        std::size_t seed = std::hash<quint64>{}(key.width);
+        std::size_t seed = std::hash<quintptr>{}(key.source);
+        seed ^= std::hash<quint64>{}(key.width) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         seed ^= std::hash<quint32>{}(key.height) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         seed ^= std::hash<quint32>{}(key.format) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         seed ^= std::hash<int>{}(key.plane) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
