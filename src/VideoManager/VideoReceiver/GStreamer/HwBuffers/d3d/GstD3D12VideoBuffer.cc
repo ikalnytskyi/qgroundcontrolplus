@@ -104,7 +104,7 @@ StagingEntryRef addRefEntry(const StagingEntry& e)
     return StagingEntryRef(e);
 }
 
-/// Caches StagingEntry per (size, format, plane); pool owns one ref on each held COM object, acquire() returns the
+/// Caches StagingEntry per source resource and layout; pool owns one ref on each held COM object, acquire() returns the
 /// COM objects AddRef'd.
 class StagingResourcePool
 {
@@ -190,7 +190,8 @@ ID3D12Resource* copySliceToStaging(ID3D12Resource* resource, guint subIdx, int p
     D3D12_HEAP_PROPERTIES heapProps = {};
     heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-    const StagingKey key{srcDesc.Width, srcDesc.Height, UINT(srcDesc.Format), planeIdx};
+    const StagingKey key{reinterpret_cast<quintptr>(resource), srcDesc.Width, srcDesc.Height, UINT(srcDesc.Format),
+                         planeIdx};
     StagingEntryRef entry =
         StagingResourcePool::instance().acquire(d3dDev, queueType, key, dstDesc, heapProps, planeIdx, subIdx);
     if (!entry.valid()) {
