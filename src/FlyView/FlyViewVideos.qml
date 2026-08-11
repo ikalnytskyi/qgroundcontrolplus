@@ -110,6 +110,13 @@ Item {
                                  : _ci.camIdx === 2 ? QGroundControl.videoManager.pipCamera2Decoding
                                  : _ci.camIdx === 3 ? QGroundControl.videoManager.pipCamera3Decoding
                                  : false
+        // camIdx 1 ("pipCamera1Video") is only actually driven by Video2Settings when there's no
+        // MAVLink-reported second camera to auto-follow instead (see VideoManager::_updateSettings,
+        // which only falls back to Video2Settings when the MAVLink camera stream is absent) — this
+        // matches _manualMode's own condition for when that pip slot is manually configured.
+        property var  _drivingGuideSettings: _ci.camIdx === 0 ? QGroundControl.settingsManager.videoSettings
+                                             : (_ci.camIdx === 1 && _ci._manualMode) ? QGroundControl.settingsManager.video2Settings
+                                             : null
 
         // Full-screen when current; pip-slot position otherwise.
         // When in pip, position non-current cameras ABOVE using negative y, x=0 (PipView has margins)
@@ -181,11 +188,25 @@ Item {
 
         // Video surface - only visible when decoding
         Loader {
+            id:              _videoLoader
             anchors.fill:    parent
             sourceComponent: _videoOutputComp
             onLoaded:        { if (item) item.objectName = _ci.vidName }
             visible:         _ci._decoding  // Hide video when not decoding
             z:               10
+        }
+
+        // Driving guide lines, configured per-stream in the Video/Video2 settings pages, to help
+        // an operator judge clearance while remotely maneuvering the vehicle. Only shown fullscreen
+        // (not in the small pip thumbnails, where it'd be unreadable clutter), and aligned to the
+        // VideoOutput's contentRect so it isn't thrown off by letterbox/pillarbox bars whenever
+        // videoFit isn't "Fill".
+        DrivingGuideOverlay {
+            visible:       _ci._cur && _ci._decoding && _ci._drivingGuideSettings !== null
+                           && _ci._drivingGuideSettings.drivingGuideEnabled.rawValue
+            videoSettings: _ci._drivingGuideSettings
+            videoItem:     _videoLoader.item
+            z:             11
         }
 
         // Click a pip item to promote it to current camera (no stream restarts).

@@ -42,6 +42,59 @@
                     "showWhen": "videoSource === QGroundControl.settingsManager.video2Settings.udp264VideoSource || videoSource === QGroundControl.settingsManager.video2Settings.udp265VideoSource || videoSource === QGroundControl.settingsManager.video2Settings.mpegtsVideoSource"
                 }
             ]
+        },
+        {
+            "heading": "Driving Guide",
+            "keywords": ["driving guide", "trajectory", "overlay", "guide lines", "maneuvering", "clearance", "fpv"],
+            "controls": [
+                {
+                    "setting": "video2Settings.drivingGuideEnabled"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideCameraSideOffset",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideCameraFrontSetback",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideCameraHeight",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideCameraTilt",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideCameraFov",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideCameraVfov",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideVehicleWidth",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideNearDistance",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideFarDistance",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideColor",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                },
+                {
+                    "setting": "video2Settings.drivingGuideLineWidth",
+                    "enableWhen": "QGroundControl.settingsManager.video2Settings.drivingGuideEnabled.rawValue"
+                }
+            ]
         }
     ]
 }

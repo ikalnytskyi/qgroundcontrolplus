@@ -200,9 +200,8 @@ void TopLevelViewsTest::_testSettingsHiddenSectionAfterPageSwitch()
     QTRY_VERIFY(!findVisibleSectionButton(videoButton->parentItem(), QStringLiteral("Settings")));
 }
 
-// When a page collapses to a single visible section while one of its sections is
-// selected, the selection must normalize to the page itself so the nav still has
-// a checked item.
+// Disabling the video source hides source-dependent sections while retaining
+// independent sections such as local storage and the driving guide.
 void TopLevelViewsTest::_testSettingsSectionCollapseToSingle()
 {
     startUI();
@@ -225,11 +224,14 @@ void TopLevelViewsTest::_testSettingsSectionCollapseToSingle()
     QVERIFY(_clickItemAt(sourceSection, 0.5, 0.5, QStringLiteral("section Video Source")));
     QTRY_VERIFY(!videoButton->property("checked").toBool());
 
-    // Disabling the source hides all other sections, leaving only "Video Source"
+    // Disabling the source hides the source-dependent sections. The selected
+    // Video Source section remains available because its selector is still valid.
     setVideoSource(VideoSettings::videoDisabled);
 
-    QTRY_VERIFY(!findVisibleSectionButton(videoButton->parentItem(), QStringLiteral("Video Source")));
-    QTRY_VERIFY(videoButton->property("checked").toBool());
+    QTRY_VERIFY(findVisibleSectionButton(videoButton->parentItem(), QStringLiteral("Video Source")));
+    QTRY_VERIFY(!findVisibleSectionButton(videoButton->parentItem(), QStringLiteral("Connection")));
+    QTRY_VERIFY(!findVisibleSectionButton(videoButton->parentItem(), QStringLiteral("Settings")));
+    QTRY_VERIFY(!videoButton->property("checked").toBool());
     QTRY_VERIFY(findVisibleItem(_rootItem, QStringLiteral("settingsGroup_VideoSource"), 0));
 }
 
