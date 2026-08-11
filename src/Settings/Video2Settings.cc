@@ -110,6 +110,19 @@ DECLARE_SETTINGSFACT_NO_FUNC(Video2Settings, tcpUrl)
     return _tcpUrlFact;
 }
 
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideEnabled)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideCameraHeight)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideCameraTilt)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideCameraFov)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideCameraVfov)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideVehicleWidth)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideNearDistance)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideFarDistance)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideColor)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideLineWidth)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideCameraSideOffset)
+DECLARE_SETTINGSFACT(Video2Settings, drivingGuideCameraFrontSetback)
+
 bool Video2Settings::streamConfigured(void)
 {
     const QString vSource = videoSource()->rawValue().toString();
