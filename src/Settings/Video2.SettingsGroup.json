@@ -46,6 +46,145 @@
             "default": "",
             "label": "TCP URL",
             "keywords": "tcp,video url,stream url"
+        },
+        {
+            "name": "drivingGuideEnabled",
+            "shortDesc": "Show driving guide lines overlaid on the video.",
+            "longDesc": "When enabled, draws configurable guide lines over the video showing the vehicle's projected width and ground-distance markers ahead of the camera, helping an operator judge clearance while remotely driving or flying the vehicle in close quarters. Off by default.",
+            "type": "bool",
+            "default": false,
+            "label": "Show Driving Guide Lines",
+            "keywords": "driving guide,trajectory,overlay,guide lines,maneuvering,clearance,fpv"
+        },
+        {
+            "name": "drivingGuideCameraHeight",
+            "shortDesc": "Height of the camera above the ground, in meters.",
+            "longDesc": "Straight-line vertical distance from the camera lens down to the ground. Combined with the tilt angle, this determines how far away each point on the ground appears in the video.",
+            "type": "float",
+            "decimalPlaces": 2,
+            "min": 0.01,
+            "units": "m",
+            "default": 1.38,
+            "label": "Camera Height Above Ground",
+            "keywords": "driving guide,camera height"
+        },
+        {
+            "name": "drivingGuideCameraTilt",
+            "shortDesc": "How far the camera points downward from horizontal, in degrees.",
+            "longDesc": "Angle between the camera's line of sight and the horizon. 0° means the camera points straight ahead, parallel to the ground; 90° means it points straight down at the ground directly below it.",
+            "type": "float",
+            "decimalPlaces": 1,
+            "min": 0,
+            "max": 90,
+            "units": "deg",
+            "default": 15,
+            "label": "Camera Tilt Angle",
+            "keywords": "driving guide,camera tilt,pitch"
+        },
+        {
+            "name": "drivingGuideCameraFov",
+            "shortDesc": "Camera's full horizontal field of view, edge to edge, in degrees.",
+            "longDesc": "The horizontal angle the camera lens captures, from the left edge of the video frame to the right edge. Check your camera's datasheet for this value — usually listed as 'Field of View (H)' or 'FOV (Horizontal)'. Defaults to the UNV IPC2124LE-ADF28KMC-DL (2.8mm lens) spec of 97.0°.",
+            "type": "float",
+            "decimalPlaces": 1,
+            "min": 1,
+            "max": 179,
+            "units": "deg",
+            "default": 97.0,
+            "label": "Camera Horizontal Field of View",
+            "keywords": "driving guide,field of view,fov"
+        },
+        {
+            "name": "drivingGuideCameraVfov",
+            "shortDesc": "Camera's full vertical field of view, edge to edge, in degrees.",
+            "longDesc": "The vertical angle the camera lens captures, from the top edge of the video frame to the bottom edge. Kept as a separate setting from the horizontal FOV because real lenses — especially wide-angle ones — don't relate the two through the video's aspect ratio; check your camera's datasheet, usually listed as 'Field of View (V)' or 'FOV (Vertical)'. Defaults to the UNV IPC2124LE-ADF28KMC-DL (2.8mm lens) spec of 52.2°.",
+            "type": "float",
+            "decimalPlaces": 1,
+            "min": 1,
+            "max": 179,
+            "units": "deg",
+            "default": 52.2,
+            "label": "Camera Vertical Field of View",
+            "keywords": "driving guide,field of view,fov,vertical"
+        },
+        {
+            "name": "drivingGuideVehicleWidth",
+            "shortDesc": "Full width of the vehicle, in meters.",
+            "longDesc": "Width of the vehicle at its widest point (e.g. mirror to mirror). The guide's two side lines are drawn this far apart, centered on the vehicle's centerline unless a camera side offset is set.",
+            "type": "float",
+            "decimalPlaces": 2,
+            "min": 0.01,
+            "units": "m",
+            "default": 1.13,
+            "label": "Vehicle Width",
+            "keywords": "driving guide,vehicle width"
+        },
+        {
+            "name": "drivingGuideNearDistance",
+            "shortDesc": "Distance from the vehicle's front edge to the near guide line, in meters.",
+            "longDesc": "Ground distance, measured straight ahead from the vehicle's front edge (e.g. the front bumper), at which the nearer guide line is drawn. Measured from the vehicle, not the camera — the camera's own mounting position relative to the vehicle is set separately via the side offset and front setback settings.",
+            "type": "float",
+            "decimalPlaces": 2,
+            "min": 0.01,
+            "units": "m",
+            "default": 0.5,
+            "label": "Near Guide Distance",
+            "keywords": "driving guide,near distance"
+        },
+        {
+            "name": "drivingGuideFarDistance",
+            "shortDesc": "Distance from the vehicle's front edge to the far guide line, in meters.",
+            "longDesc": "Ground distance, measured straight ahead from the vehicle's front edge, at which the farther guide line is drawn. Extra unlabeled rungs are drawn automatically at every whole meter between the near and far distances.",
+            "type": "float",
+            "decimalPlaces": 2,
+            "min": 0.01,
+            "units": "m",
+            "default": 5.0,
+            "label": "Far Guide Distance",
+            "keywords": "driving guide,far distance"
+        },
+        {
+            "name": "drivingGuideColor",
+            "shortDesc": "Color of the guide lines.",
+            "longDesc": "Color used to draw every guide line and rung, as a #RRGGBB hex value (e.g. #2196f3 for blue).",
+            "type": "string",
+            "default": "#2196f3",
+            "label": "Guide Line Color",
+            "keywords": "driving guide,color"
+        },
+        {
+            "name": "drivingGuideLineWidth",
+            "shortDesc": "Thickness of the guide lines, in pixels.",
+            "longDesc": "Stroke width, in on-screen pixels, used to draw every guide line and rung.",
+            "type": "float",
+            "decimalPlaces": 1,
+            "min": 1,
+            "units": "px",
+            "default": 2,
+            "label": "Guide Line Width",
+            "keywords": "driving guide,line width,thickness"
+        },
+        {
+            "name": "drivingGuideCameraSideOffset",
+            "shortDesc": "How far the camera is mounted to the side of the vehicle's centerline, in meters.",
+            "longDesc": "Distance from the vehicle's centerline (the line running front-to-back through the middle of the vehicle's width) to the camera. Positive values mean the camera is to the right of centerline; negative values mean it's to the left. Use 0 if the camera is mounted dead-center.",
+            "type": "float",
+            "decimalPlaces": 2,
+            "units": "m",
+            "default": 0,
+            "label": "Camera Side Offset",
+            "keywords": "driving guide,off-center,offset,camera position,side,lateral"
+        },
+        {
+            "name": "drivingGuideCameraFrontSetback",
+            "shortDesc": "How far the camera is set back from the vehicle's front edge, in meters.",
+            "longDesc": "Distance from the vehicle's front edge (e.g. the front bumper) to the camera, measured along the direction of travel. Positive values mean the camera is behind that edge — set back into the vehicle body, the common case for a mast mounted on the chassis. Negative values mean the camera is ahead of that edge, e.g. on a boom extending past the bumper. Use 0 if the camera is mounted flush with the front edge.",
+            "type": "float",
+            "decimalPlaces": 2,
+            "units": "m",
+            "default": 0.1,
+            "label": "Camera Front Setback",
+            "keywords": "driving guide,off-center,offset,camera position,front,setback,longitudinal"
         }
     ]
 }
