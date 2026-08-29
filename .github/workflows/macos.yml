@@ -86,7 +86,7 @@ jobs:
         with:
           build-dir: ${{ runner.temp }}/build
           build-type: ${{ matrix.build_type }}
-          extra-args: -DQGC_MACOS_SIGN_WITH_IDENTITY=${{ github.event_name != 'pull_request' && 'ON' || 'OFF' }}
+          extra-args: -DQGC_MACOS_SIGN_WITH_IDENTITY=OFF
 
       - name: Build
         uses: ./.github/actions/cmake-build
@@ -102,7 +102,7 @@ jobs:
           expect-archs: x86_64h arm64
 
       - name: Import Code Signing Certificate
-        if: github.event_name != 'pull_request'
+        if: false
         uses: apple-actions/import-codesign-certs@v7
         with:
           p12-file-base64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
