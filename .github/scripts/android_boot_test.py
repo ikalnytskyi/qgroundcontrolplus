@@ -214,7 +214,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--apk", required=True, type=Path, help="Path to APK file")
     parser.add_argument(
         "--package",
-        default="org.mavlink.qgroundcontrol",
+        default="org.mavlink.rtqgroundcontrol",
         help="Android package name",
     )
     parser.add_argument("--timeout", type=int, default=90, help="Timeout in seconds")
