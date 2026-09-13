@@ -218,6 +218,13 @@ void APMSensorsCalibrationUITest::_testCompassCalibrationStartRejected()
     // Vehicle rejects MAV_CMD_DO_START_MAG_CAL
     mockLink->setAPMMagCalStartFailureMode(true);
 
+    // Background message-interval requests can time out while handling a rejected
+    // START; they are expected here and not part of this test's assertions.
+    ignoreLogMessage("Vehicle.MavCommandQueue", QtWarningMsg,
+                     QRegularExpression(QStringLiteral("Giving up sending command after max retries: "
+                                                      "MAV_CMD_SET_MESSAGE_INTERVAL message: "
+                                                      "(EXTENDED_SYS_STATE|HOME_POSITION)")));
+
     // START is sent with showError=true so the rejection first shows the command
     // error, then _stopCalibration(StopCalibrationFailed) shows the cal failed message.
     expectAppMessage(QRegularExpression(QStringLiteral("command failed")));
