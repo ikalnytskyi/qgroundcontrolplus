@@ -67,6 +67,7 @@ runs:
           --default "${DEFAULT}"
 
     - name: Attest Build with SBOM
+      continue-on-error: true
       uses: ./.github/actions/attest-sbom
       with:
         subject-path: ${{ steps.src.outputs.path }}
